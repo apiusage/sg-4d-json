@@ -1,5 +1,6 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
+const fs = require('fs');
 
 async function scrapeLastRound() {
   const allResult = [];
@@ -15,43 +16,32 @@ async function scrapeLastRound() {
     const webpageResp = await axios.get(startUrl, { headers });
     const $ = cheerio.load(webpageResp.data);
 
-    // Find all <option> elements in the <select>
     const options = $('select option').toArray();
-
-    if (options.length === 0) {
-      console.error('No dates/options found in the select dropdown.');
-      return allResult;
-    }
-
-    // Use the first option only (like your Python "break")
     const firstOption = options[0];
     const queryString = $(firstOption).attr('querystring');
-    if (!queryString) {
-      console.error('No querystring attribute found on first option.');
-      return allResult;
-    }
 
     const resultUrl = `http://www.singaporepools.com.sg/en/4d/Pages/Results.aspx?${queryString}`;
     const drawPageResp = await axios.get(resultUrl, { headers });
 
     const $$ = cheerio.load(drawPageResp.data);
 
-    // Scrape first, second, third prizes
     const fPrize = $$('.tdFirstPrize').first().text().trim();
     const sPrize = $$('.tdSecondPrize').first().text().trim();
     const tPrize = $$('.tdThirdPrize').first().text().trim();
 
     allResult.push(fPrize, sPrize, tPrize);
 
-    // Starter prizes
     $$('.tbodyStarterPrizes td').each((i, elem) => {
       allResult.push($$(elem).text().trim());
     });
 
-    // Consolation prizes
     $$('.tbodyConsolationPrizes td').each((i, elem) => {
       allResult.push($$(elem).text().trim());
     });
+
+    // Save to 4d.json
+    fs.writeFileSync('4d.json', JSON.stringify(allResult, null, 2), 'utf-8');
+    console.log('4d.json updated successfully');
 
     return allResult;
 
@@ -61,7 +51,6 @@ async function scrapeLastRound() {
   }
 }
 
-// Run and print results
 scrapeLastRound().then(results => {
   console.log('4D Last Round Results:', results);
 });
