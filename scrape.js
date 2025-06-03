@@ -1,44 +1,40 @@
-const axios = require("axios");
-const cheerio = require("cheerio");
+const puppeteer = require("puppeteer");
 const fs = require("fs");
 
 async function fetch4D() {
-  try {
-    const url = "https://www.singaporepools.com.sg/en/product/pages/4d_results.aspx";
+  const browser = await puppeteer.launch({ headless: "new" }); // or true for old versions
+  const page = await browser.newPage();
 
-    const { data } = await axios.get(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-      }
-    });
+  await page.goto("https://www.singaporepools.com.sg/en/product/pages/4d_results.aspx", {
+    waitUntil: "networkidle2",
+  });
 
-    const $ = cheerio.load(data);
-
-    const result = {
-      date: $(".drawDate").first().text().trim(),
-      firstPrize: $(".result1 span").first().text().trim(),
-      secondPrize: $(".result2 span").first().text().trim(),
-      thirdPrize: $(".result3 span").first().text().trim(),
-      starterPrizes: [],
-      consolationPrizes: [],
-      updatedAt: new Date().toISOString()
+  const result = await page.evaluate(() => {
+    const getText = (selector) => {
+      const el = document.querySelector(selector);
+      return el ? el.innerText.trim() : "";
     };
 
-    $(".fourDStarter span").each((_, el) => {
-      const val = $(el).text().trim();
-      if (val) result.starterPrizes.push(val);
-    });
+    const getList = (selector) =>
+      Array.from(document.querySelectorAll(selector)).map((el) => el.innerText.trim());
 
-    $(".fourDConsolation span").each((_, el) => {
-      const val = $(el).text().trim();
-      if (val) result.consolationPrizes.push(val);
-    });
+    return {
+      date: getText(".drawDate"),
+      firstPrize: getText(".result1 span"),
+      secondPrize: getText(".result2 span"),
+      thirdPrize: getText(".result3 span"),
+      starterPrizes: getList(".fourDStarter span"),
+      consolationPrizes: getList(".fourDConsolation span"),
+      updatedAt: new Date().toISOString(),
+    };
+  });
 
-    fs.writeFileSync("4d.json", JSON.stringify(result, null, 2));
-    console.log("✅ Scraped and saved to 4d.json");
-  } catch (err) {
-    console.error("❌ Scrape failed:", err.message);
-  }
+  await browser.close();
+
+  fs.writeFileSync("4d.json", JSON.stringify(result, null, 2));
+  console.log("✅ 4D results saved to 4d.json");
 }
 
-fetch4D();
+fetch4D().catch((err) => {
+  console.error("❌ Scraping failed:", err);
+});
