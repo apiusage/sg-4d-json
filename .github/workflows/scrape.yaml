@@ -1,43 +1,39 @@
 name: Scrape 4D
 
 on:
-  # Schedule to run at 7:00 PM Singapore Time (SGT) every Wed, Sat, and Sun
-  # Singapore is UTC+8, so 7:00 PM SGT = 11:00 AM UTC
+  # Schedule to run at 7:00 PM and 8:00 PM Singapore Time (SGT) every Wed, Sat, and Sun
+  # SGT is UTC+8 => 7:00 PM = 11:00 AM UTC, 8:00 PM = 12:00 PM UTC
   schedule:
-    - cron: '0 11 * * 3,6,0'
-    
+    - cron: '0 11 * * 3,6,0'  # 7:00 PM SGT
+    - cron: '0 12 * * 3,6,0'  # 8:00 PM SGT
+
   # Allows manual trigger from the GitHub Actions UI
   workflow_dispatch:
 
 jobs:
   run-scraper:
-    runs-on: ubuntu-latest  # Use the latest Ubuntu runner
+    runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Check out the code from the repository
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          persist-credentials: false  # Avoid using GitHub token from checkout
+          persist-credentials: false
 
-      # Step 2: Setup Node.js environment
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18  # Specify Node.js version
+          node-version: 18
 
-      # Step 3: Install project dependencies from package.json
       - name: Install dependencies
         run: npm install
 
-      # Step 4: Run the scraper script defined in package.json (e.g., npm run scrape)
       - name: Run scraper
         run: npm run scrape
 
-      # Step 5: Commit and push the updated JSON file if there are changes
       - name: Commit and push updated JSON
         env:
-          PAT: ${{ secrets.PAT }}  # Personal Access Token stored in repo secrets
+          PAT: ${{ secrets.PAT }}
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
