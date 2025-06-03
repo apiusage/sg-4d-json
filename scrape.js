@@ -2,36 +2,84 @@ const axios = require("axios");
 const cheerio = require("cheerio");
 const fs = require("fs");
 
-async function fetch4D() {
+const HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " +
+    "(KHTML, like Gecko) Chrome/44.0.2403.157 Safari/537.36",
+  "Accept-Language": "en-US,en;q=0.5",
+};
+
+const archiveUrl =
+  "http://www.singaporepools.com.sg/DataFileArchive/Lottery/Output/fourd_result_draw_list_en.html";
+
+async function fetchAllDraws(numOfRounds = 0, scrapeAll = false) {
   try {
-    const url = "https://www.singaporepools.com.sg/en/product/4d";
-    const { data } = await axios.get(url, {
-      headers: { "User-Agent": "Mozilla/5.0" },
+    // Step 1: Fetch the archive page with all draw dates
+    const { data: archiveHtml } = await axios.get(archiveUrl, { headers: HEADERS });
+    const $archive = cheerio.load(archiveHtml);
+
+    // Step 2: Extract <option> elements inside <select> (dates)
+    const options = [];
+    $archive("select option").each((i, el) => {
+      const querystring = $(el).attr("querystring");
+      if (querystring) options.push(querystring);
     });
 
-    const $ = cheerio.load(data);
-    const result = {
-      date: $(".drawDate").first().text().trim(),
-      firstPrize: $("#drawList .fourDResult .result1 span").text().trim(),
-      secondPrize: $("#drawList .fourDResult .result2 span").text().trim(),
-      thirdPrize: $("#drawList .fourDResult .result3 span").text().trim(),
-      starterPrizes: [],
-      consolationPrizes: [],
-      updatedAt: new Date().toISOString(),
-    };
+    const results = [];
+    let count = 0;
 
-    $("#drawList .fourDStarter span").each((_, el) =>
-      result.starterPrizes.push($(el).text().trim())
-    );
-    $("#drawList .fourDConsolation span").each((_, el) =>
-      result.consolationPrizes.push($(el).text().trim())
-    );
+    for (const querystring of options) {
+      if (!scrapeAll && count >= numOfRounds) break;
 
-    fs.writeFileSync("4d.json", JSON.stringify(result, null, 2));
-    console.log("✅ 4D results scraped and saved.");
+      // Step 3: Construct URL for each draw result page
+      const drawUrl = `http://www.singaporepools.com.sg/en/4d/Pages/Results.aspx?${querystring}`;
+
+      try {
+        const { data: drawHtml } = await axios.get(drawUrl, { headers: HEADERS });
+        const $draw = cheerio.load(drawHtml);
+
+        // Step 4: Extract prizes (use selectors analogous to your XPath)
+        // 1st, 2nd, 3rd prizes are in <td class="tdFirstPrize"> etc.
+        const firstPrize = $draw("td.tdFirstPrize").first().text().trim();
+        const secondPrize = $draw("td.tdSecondPrize").first().text().trim();
+        const thirdPrize = $draw("td.tdThirdPrize").first().text().trim();
+
+        // Starter prizes (tbody with class tbodyStarterPrizes > td)
+        const starterPrizes = [];
+        $draw("tbody.tbodyStarterPrizes td").each((i, el) => {
+          starterPrizes.push($(el).text().trim());
+        });
+
+        // Consolation prizes (tbody with class tbodyConsolationPrizes > td)
+        const consolationPrizes = [];
+        $draw("tbody.tbodyConsolationPrizes td").each((i, el) => {
+          consolationPrizes.push($(el).text().trim());
+        });
+
+        results.push({
+          url: drawUrl,
+          firstPrize,
+          secondPrize,
+          thirdPrize,
+          starterPrizes,
+          consolationPrizes,
+        });
+
+        console.log(`Scraped draw #${count + 1}: ${drawUrl}`);
+
+        count++;
+      } catch (err) {
+        console.warn(`Failed to fetch draw at ${drawUrl}: ${err.message}`);
+      }
+    }
+
+    // Step 5: Save results to JSON file
+    fs.writeFileSync("4d_all_results.json", JSON.stringify(results, null, 2));
+    console.log(`✅ Finished scraping ${count} draws.`);
   } catch (err) {
     console.error("❌ Scraping failed:", err.message);
   }
 }
 
-fetch4D();
+// Usage: scrape 10 rounds, scrapeAll = false
+fetchAllDraws(10, false);
