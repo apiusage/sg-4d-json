@@ -11,28 +11,56 @@ async function fetch4D() {
 
     const $ = cheerio.load(data);
 
-    const result = {
-      date: $(".result_draw_date").first().text().trim(),
-      firstPrize: $(".fourd_firstPrize .fourd_winningNo").first().text().trim(),
-      secondPrize: $(".fourd_secondPrize .fourd_winningNo").first().text().trim(),
-      thirdPrize: $(".fourd_thirdPrize .fourd_winningNo").first().text().trim(),
-      starterPrizes: [],
-      consolationPrizes: [],
-      updatedAt: new Date().toISOString(),
+    // Array to store all draws
+    const results = [];
+
+    // Process each draw in the slider
+    $(".divLatestDraws .slide-container li").each((index, element) => {
+      const draw = $(element);
+      
+      const drawInfo = {
+        date: draw.find(".drawDate").text().trim(),
+        drawNumber: draw.find(".drawNumber").text().trim().replace("Draw No. ", ""),
+        firstPrize: draw.find(".tdFirstPrize").text().trim(),
+        secondPrize: draw.find(".tdSecondPrize").text().trim(),
+        thirdPrize: draw.find(".tdThirdPrize").text().trim(),
+        starterPrizes: [],
+        consolationPrizes: []
+      };
+
+      // Extract starter prizes (2 columns per row)
+      draw.find(".tbodyStarterPrizes tr").each((i, row) => {
+        $(row).find("td").each((j, cell) => {
+          const prize = $(cell).text().trim();
+          if (prize) {
+            drawInfo.starterPrizes.push(prize);
+          }
+        });
+      });
+
+      // Extract consolation prizes (2 columns per row)
+      draw.find(".tbodyConsolationPrizes tr").each((i, row) => {
+        $(row).find("td").each((j, cell) => {
+          const prize = $(cell).text().trim();
+          if (prize) {
+            drawInfo.consolationPrizes.push(prize);
+          }
+        });
+      });
+
+      results.push(drawInfo);
+    });
+
+    const output = {
+      scrapedAt: new Date().toISOString(),
+      draws: results
     };
 
-    $(".starter span.fourd_winningNo").each((_, el) => {
-      result.starterPrizes.push($(el).text().trim());
-    });
-
-    $(".consolation span.fourd_winningNo").each((_, el) => {
-      result.consolationPrizes.push($(el).text().trim());
-    });
-
-    fs.writeFileSync("4d.json", JSON.stringify(result, null, 2));
-    console.log("✅ 4D results scraped and saved.");
+    fs.writeFileSync("4d.json", JSON.stringify(output, null, 2));
+    console.log(`✅ Successfully scraped ${results.length} 4D draw(s) and saved to 4d.json`);
   } catch (err) {
     console.error("❌ Scraping failed:", err.message);
+    process.exit(1);
   }
 }
 
