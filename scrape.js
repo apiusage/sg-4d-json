@@ -10,14 +10,11 @@ async function fetch4D() {
     });
 
     const $ = cheerio.load(data);
-
-    // Array to store all draws
     const results = [];
 
-    // Process each draw in the slider
-    $(".divLatestDraws .slide-container li").each((index, element) => {
+    $(".divLatestDraws .ulDraws li").each((index, element) => {
       const draw = $(element);
-      
+
       const drawInfo = {
         date: draw.find(".drawDate").text().trim(),
         drawNumber: draw.find(".drawNumber").text().trim().replace("Draw No. ", ""),
@@ -28,23 +25,17 @@ async function fetch4D() {
         consolationPrizes: []
       };
 
-      // Extract starter prizes (2 columns per row)
       draw.find(".tbodyStarterPrizes tr").each((i, row) => {
         $(row).find("td").each((j, cell) => {
           const prize = $(cell).text().trim();
-          if (prize) {
-            drawInfo.starterPrizes.push(prize);
-          }
+          if (prize) drawInfo.starterPrizes.push(prize);
         });
       });
 
-      // Extract consolation prizes (2 columns per row)
       draw.find(".tbodyConsolationPrizes tr").each((i, row) => {
         $(row).find("td").each((j, cell) => {
           const prize = $(cell).text().trim();
-          if (prize) {
-            drawInfo.consolationPrizes.push(prize);
-          }
+          if (prize) drawInfo.consolationPrizes.push(prize);
         });
       });
 
