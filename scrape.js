@@ -1,17 +1,22 @@
-import axios from 'axios';
-import * as cheerio from 'cheerio';
+const axios = require('axios');
+const cheerio = require('cheerio');
 
-interface DrawResult {
-  date: string;
-  drawNumber: string;
-  firstPrize: string;
-  secondPrize: string;
-  thirdPrize: string;
-  starterPrizes: string[];
-  consolationPrizes: string[];
-}
+/**
+ * @typedef {Object} DrawResult
+ * @property {string} date
+ * @property {string} drawNumber
+ * @property {string} firstPrize
+ * @property {string} secondPrize
+ * @property {string} thirdPrize
+ * @property {string[]} starterPrizes
+ * @property {string[]} consolationPrizes
+ */
 
-async function fetchDrawList(): Promise<string[]> {
+/**
+ * Fetch list of query strings for draws
+ * @returns {Promise<string[]>}
+ */
+async function fetchDrawList() {
   const startUrl = 'http://www.singaporepools.com.sg/DataFileArchive/Lottery/Output/fourd_result_draw_list_en.html';
   const headers = {
     'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/44.0.2403.157 Safari/537.36',
@@ -21,10 +26,9 @@ async function fetchDrawList(): Promise<string[]> {
   try {
     const response = await axios.get(startUrl, { headers });
     const $ = cheerio.load(response.data);
-    const options = $('select option');
-    const queryStrings: string[] = [];
+    const queryStrings = [];
 
-    options.each((_, element) => {
+    $('select option').each((_, element) => {
       const queryString = $(element).attr('querystring');
       if (queryString) {
         queryStrings.push(queryString);
@@ -38,7 +42,12 @@ async function fetchDrawList(): Promise<string[]> {
   }
 }
 
-async function fetchDrawResult(queryString: string): Promise<DrawResult | null> {
+/**
+ * Fetch detailed draw result by query string
+ * @param {string} queryString
+ * @returns {Promise<DrawResult|null>}
+ */
+async function fetchDrawResult(queryString) {
   const url = `http://www.singaporepools.com.sg/en/4d/Pages/Results.aspx?${queryString}`;
   const headers = {
     'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/44.0.2403.157 Safari/537.36',
@@ -55,12 +64,12 @@ async function fetchDrawResult(queryString: string): Promise<DrawResult | null> 
     const secondPrize = $('td.tdSecondPrize').text().trim();
     const thirdPrize = $('td.tdThirdPrize').text().trim();
 
-    const starterPrizes: string[] = [];
+    const starterPrizes = [];
     $('tbody.tbodyStarterPrizes td').each((_, element) => {
       starterPrizes.push($(element).text().trim());
     });
 
-    const consolationPrizes: string[] = [];
+    const consolationPrizes = [];
     $('tbody.tbodyConsolationPrizes td').each((_, element) => {
       consolationPrizes.push($(element).text().trim());
     });
@@ -81,17 +90,16 @@ async function fetchDrawResult(queryString: string): Promise<DrawResult | null> 
 }
 
 async function main() {
-  const numberOfRounds = 5; // Set the number of rounds to scrape
-  const scrapeAll = false; // Set to true to scrape all available rounds
+  const numberOfRounds = 5; // Number of rounds to scrape
+  const scrapeAll = false; // Set to true to scrape all
 
   const queryStrings = await fetchDrawList();
-  const results: DrawResult[] = [];
+  const results = [];
 
   for (let i = 0; i < queryStrings.length; i++) {
     if (!scrapeAll && i >= numberOfRounds) {
       break;
     }
-
     const result = await fetchDrawResult(queryStrings[i]);
     if (result) {
       results.push(result);
