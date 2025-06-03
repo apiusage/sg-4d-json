@@ -1,40 +1,39 @@
-const puppeteer = require("puppeteer");
+const axios = require("axios");
+const cheerio = require("cheerio");
 const fs = require("fs");
 
 async function fetch4D() {
-  const browser = await puppeteer.launch({ headless: "new" }); // or true for old versions
-  const page = await browser.newPage();
+  try {
+    const url = "https://www.singaporepools.com.sg/en/product/Pages/4d_results.aspx";
+    const { data } = await axios.get(url, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+    });
 
-  await page.goto("https://www.singaporepools.com.sg/en/product/pages/4d_results.aspx", {
-    waitUntil: "networkidle2",
-  });
+    const $ = cheerio.load(data);
 
-  const result = await page.evaluate(() => {
-    const getText = (selector) => {
-      const el = document.querySelector(selector);
-      return el ? el.innerText.trim() : "";
-    };
-
-    const getList = (selector) =>
-      Array.from(document.querySelectorAll(selector)).map((el) => el.innerText.trim());
-
-    return {
-      date: getText(".drawDate"),
-      firstPrize: getText(".result1 span"),
-      secondPrize: getText(".result2 span"),
-      thirdPrize: getText(".result3 span"),
-      starterPrizes: getList(".fourDStarter span"),
-      consolationPrizes: getList(".fourDConsolation span"),
+    const result = {
+      date: $(".result_draw_date").first().text().trim(),
+      firstPrize: $(".fourd_firstPrize .fourd_winningNo").first().text().trim(),
+      secondPrize: $(".fourd_secondPrize .fourd_winningNo").first().text().trim(),
+      thirdPrize: $(".fourd_thirdPrize .fourd_winningNo").first().text().trim(),
+      starterPrizes: [],
+      consolationPrizes: [],
       updatedAt: new Date().toISOString(),
     };
-  });
 
-  await browser.close();
+    $(".starter span.fourd_winningNo").each((_, el) => {
+      result.starterPrizes.push($(el).text().trim());
+    });
 
-  fs.writeFileSync("4d.json", JSON.stringify(result, null, 2));
-  console.log("✅ 4D results saved to 4d.json");
+    $(".consolation span.fourd_winningNo").each((_, el) => {
+      result.consolationPrizes.push($(el).text().trim());
+    });
+
+    fs.writeFileSync("4d.json", JSON.stringify(result, null, 2));
+    console.log("✅ 4D results scraped and saved.");
+  } catch (err) {
+    console.error("❌ Scraping failed:", err.message);
+  }
 }
 
-fetch4D().catch((err) => {
-  console.error("❌ Scraping failed:", err);
-});
+fetch4D();
