@@ -1,58 +1,104 @@
-const axios = require("axios");
-const cheerio = require("cheerio");
-const fs = require("fs");
+import axios from 'axios';
+import * as cheerio from 'cheerio';
 
-async function fetch4D() {
+interface DrawResult {
+  date: string;
+  drawNumber: string;
+  firstPrize: string;
+  secondPrize: string;
+  thirdPrize: string;
+  starterPrizes: string[];
+  consolationPrizes: string[];
+}
+
+async function fetchDrawList(): Promise<string[]> {
+  const startUrl = 'http://www.singaporepools.com.sg/DataFileArchive/Lottery/Output/fourd_result_draw_list_en.html';
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/44.0.2403.157 Safari/537.36',
+    'Accept-Language': 'en-US,en;q=0.5',
+  };
+
   try {
-    const url = "https://www.singaporepools.com.sg/en/product/Pages/4d_results.aspx";
-    const { data } = await axios.get(url, {
-      headers: { "User-Agent": "Mozilla/5.0" },
+    const response = await axios.get(startUrl, { headers });
+    const $ = cheerio.load(response.data);
+    const options = $('select option');
+    const queryStrings: string[] = [];
+
+    options.each((_, element) => {
+      const queryString = $(element).attr('querystring');
+      if (queryString) {
+        queryStrings.push(queryString);
+      }
     });
 
-    const $ = cheerio.load(data);
-    const results = [];
-
-    $(".divLatestDraws .ulDraws li").each((index, element) => {
-      const draw = $(element);
-
-      const drawInfo = {
-        date: draw.find(".drawDate").text().trim(),
-        drawNumber: draw.find(".drawNumber").text().trim().replace("Draw No. ", ""),
-        firstPrize: draw.find(".tdFirstPrize").text().trim(),
-        secondPrize: draw.find(".tdSecondPrize").text().trim(),
-        thirdPrize: draw.find(".tdThirdPrize").text().trim(),
-        starterPrizes: [],
-        consolationPrizes: []
-      };
-
-      draw.find(".tbodyStarterPrizes tr").each((i, row) => {
-        $(row).find("td").each((j, cell) => {
-          const prize = $(cell).text().trim();
-          if (prize) drawInfo.starterPrizes.push(prize);
-        });
-      });
-
-      draw.find(".tbodyConsolationPrizes tr").each((i, row) => {
-        $(row).find("td").each((j, cell) => {
-          const prize = $(cell).text().trim();
-          if (prize) drawInfo.consolationPrizes.push(prize);
-        });
-      });
-
-      results.push(drawInfo);
-    });
-
-    const output = {
-      scrapedAt: new Date().toISOString(),
-      draws: results
-    };
-
-    fs.writeFileSync("4d.json", JSON.stringify(output, null, 2));
-    console.log(`✅ Successfully scraped ${results.length} 4D draw(s) and saved to 4d.json`);
-  } catch (err) {
-    console.error("❌ Scraping failed:", err.message);
-    process.exit(1);
+    return queryStrings;
+  } catch (error) {
+    console.error('Error fetching draw list:', error);
+    return [];
   }
 }
 
-fetch4D();
+async function fetchDrawResult(queryString: string): Promise<DrawResult | null> {
+  const url = `http://www.singaporepools.com.sg/en/4d/Pages/Results.aspx?${queryString}`;
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/44.0.2403.157 Safari/537.36',
+    'Accept-Language': 'en-US,en;q=0.5',
+  };
+
+  try {
+    const response = await axios.get(url, { headers });
+    const $ = cheerio.load(response.data);
+
+    const date = $('span.drawDate').text().trim();
+    const drawNumber = $('span.drawNumber').text().trim();
+    const firstPrize = $('td.tdFirstPrize').text().trim();
+    const secondPrize = $('td.tdSecondPrize').text().trim();
+    const thirdPrize = $('td.tdThirdPrize').text().trim();
+
+    const starterPrizes: string[] = [];
+    $('tbody.tbodyStarterPrizes td').each((_, element) => {
+      starterPrizes.push($(element).text().trim());
+    });
+
+    const consolationPrizes: string[] = [];
+    $('tbody.tbodyConsolationPrizes td').each((_, element) => {
+      consolationPrizes.push($(element).text().trim());
+    });
+
+    return {
+      date,
+      drawNumber,
+      firstPrize,
+      secondPrize,
+      thirdPrize,
+      starterPrizes,
+      consolationPrizes,
+    };
+  } catch (error) {
+    console.error(`Error fetching draw result for query string ${queryString}:`, error);
+    return null;
+  }
+}
+
+async function main() {
+  const numberOfRounds = 5; // Set the number of rounds to scrape
+  const scrapeAll = false; // Set to true to scrape all available rounds
+
+  const queryStrings = await fetchDrawList();
+  const results: DrawResult[] = [];
+
+  for (let i = 0; i < queryStrings.length; i++) {
+    if (!scrapeAll && i >= numberOfRounds) {
+      break;
+    }
+
+    const result = await fetchDrawResult(queryStrings[i]);
+    if (result) {
+      results.push(result);
+    }
+  }
+
+  console.log(JSON.stringify(results, null, 2));
+}
+
+main();
