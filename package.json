@@ -1,6 +1,7 @@
 {
   "name": "sg4d-scraper",
   "version": "1.0.0",
+  "description": "",
   "main": "scrape.js",
   "scripts": {
     "scrape": "node scrape.js"
