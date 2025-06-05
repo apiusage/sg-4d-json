@@ -11,7 +11,7 @@ numbers = response.json()
 first, second, third = numbers[:3]
 
 now = datetime.now()
-today = now.strftime('%Y-%m-%d')  # ISO date
+today = f"{now.day}-{now.month}-{now.year}"
 
 new_row = {
     "DrawDate": today,
