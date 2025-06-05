@@ -60,6 +60,9 @@ jobs:
       - name: Run Python script
         run: python 4djson_Append_to_Excel.py
 
+      - name: Show last 10 lines of CSV for debug
+        run: tail -n 10 4d_results.csv || echo "CSV file not found"  
+
       - name: Commit and push updated CSV
         env:
           PAT: ${{ secrets.PAT }}
