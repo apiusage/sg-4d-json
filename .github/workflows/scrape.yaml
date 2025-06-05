@@ -9,7 +9,7 @@ on:
 
 jobs:
   run-scraper:
-    if: github.event.schedule != '1 12 * * 3,6,0'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && github.event.schedule != '1 12 * * 3,6,0')
     runs-on: ubuntu-latest
 
     steps:
@@ -40,7 +40,7 @@ jobs:
           git push https://x-access-token:${{ secrets.PAT }}@github.com/${{ github.repository }} HEAD:main
 
   run-python-script:
-    if: github.event.schedule == '1 12 * * 3,6,0'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && github.event.schedule == '1 12 * * 3,6,0')
     runs-on: ubuntu-latest
 
     steps:
@@ -59,9 +59,6 @@ jobs:
 
       - name: Run Python script
         run: python 4djson_Append_to_Excel.py
-
-      - name: Show last 10 lines of CSV for debug
-        run: tail -n 10 4d_results.csv || echo "CSV file not found"  
 
       - name: Commit and push updated CSV
         env:
