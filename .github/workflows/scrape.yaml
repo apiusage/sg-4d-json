@@ -2,15 +2,15 @@ name: Scrape 4D
 
 on:
   schedule:
-    - cron: '0 11 * * 3,6,0'  # 7:00 PM SGT
+    - cron: '0 11 * * 3,6,0'  # 7:00 PM SGT (Wed, Sat, Sun)
     - cron: '0 12 * * 3,6,0'  # 8:00 PM SGT
-    - cron: '1 12 * * 3,6,0'  # 8:01 PM SGT (Python script)
+    - cron: '1 12 * * 3,6,0'  # 8:01 PM SGT (for Python appending script)
   workflow_dispatch:
 
 jobs:
   run-scraper:
-    runs-on: ubuntu-latest
     if: github.event.schedule != '1 12 * * 3,6,0'
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
@@ -37,15 +37,17 @@ jobs:
           git config --global user.email "github-actions@github.com"
           git add 4d.json
           git commit -m "Update 4D results" || echo "No changes to commit"
-          git push https://x-access-token:${PAT}@github.com/${{ github.repository }} HEAD:main
+          git push https://x-access-token:${{ secrets.PAT }}@github.com/${{ github.repository }} HEAD:main
 
   run-python-script:
-    runs-on: ubuntu-latest
     if: github.event.schedule == '1 12 * * 3,6,0'
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -53,7 +55,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install pandas openpyxl requests
+        run: pip install pandas requests
 
       - name: Run Python script
         run: python 4djson_Append_to_Excel.py
@@ -66,4 +68,4 @@ jobs:
           git config --global user.email "github-actions@github.com"
           git add 4d_results.csv
           git commit -m "Append 4D draw results to CSV" || echo "No changes to commit"
-          git push https://x-access-token:${PAT}@github.com/${{ github.repository }} HEAD:main
+          git push https://x-access-token:${{ secrets.PAT }}@github.com/${{ github.repository }} HEAD:main
