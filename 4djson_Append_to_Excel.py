@@ -1,6 +1,7 @@
 import requests
 import pandas as pd
 from datetime import datetime
+import os
 
 # URL to your JSON
 url = "https://raw.githubusercontent.com/apiusage/sg-4d-json/main/4d.json"
@@ -25,17 +26,17 @@ new_row = {
 
 file_path = "4d_results.csv"
 
-try:
-    existing_df = pd.read_excel(file_path)
-
-    # Only append if today’s DrawDate is not already present
+# Check if file exists and read or create
+if os.path.exists(file_path):
+    existing_df = pd.read_csv(file_path)
+    
+    # Only append if today's DrawDate is not already present
     if not (existing_df["DrawDate"] == today).any():
         updated_df = pd.concat([existing_df, pd.DataFrame([new_row])], ignore_index=True)
     else:
         updated_df = existing_df
-except FileNotFoundError:
-    # Create new file if not found
+else:
     updated_df = pd.DataFrame([new_row])
 
-# Save the updated DataFrame
-updated_df.to_excel(file_path, index=False)
+# Save as CSV
+updated_df.to_csv(file_path, index=False)
