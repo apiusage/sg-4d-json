@@ -1,18 +1,16 @@
 name: Scrape 4D
 
 on:
-  # Existing schedules for 7:00 PM and 8:00 PM SGT
   schedule:
     - cron: '0 11 * * 3,6,0'  # 7:00 PM SGT
     - cron: '0 12 * * 3,6,0'  # 8:00 PM SGT
-    - cron: '1 12 * * 3,6,0'  # 8:01 PM SGT (for Python script)
-
+    - cron: '1 12 * * 3,6,0'  # 8:01 PM SGT (Python script)
   workflow_dispatch:
 
 jobs:
   run-scraper:
     runs-on: ubuntu-latest
-    if: github.event.schedule != '1 12 * * 3,6,0'  # Only run this job for Node.js scraping times
+    if: github.event.schedule != '1 12 * * 3,6,0'
 
     steps:
       - name: Checkout repository
@@ -58,4 +56,14 @@ jobs:
         run: pip install pandas openpyxl requests
 
       - name: Run Python script
-        run: python 4djson_Append_to_Excel.py  # replace with your actual filename
+        run: python 4djson_Append_to_Excel.py
+
+      - name: Commit and push updated CSV
+        env:
+          PAT: ${{ secrets.PAT }}
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add 4d_results.csv
+          git commit -m "Append 4D draw results to CSV" || echo "No changes to commit"
+          git push https://x-access-token:${PAT}@github.com/${{ github.repository }} HEAD:main
