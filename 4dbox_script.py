@@ -1,7 +1,7 @@
 from collections import Counter
 from typing import List
 from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Alignment
+from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
 from datetime import datetime
 import os
 import itertools
