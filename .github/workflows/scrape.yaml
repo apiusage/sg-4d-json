@@ -23,7 +23,7 @@ jobs:
         with:
           node-version: 18
 
-      - name: Install dependencies
+      - name: Install Node dependencies
         run: npm install
 
       - name: Run scraper
@@ -39,7 +39,7 @@ jobs:
           git commit -m "Update 4D results" || echo "No changes to commit"
           git push https://x-access-token:${{ secrets.PAT }}@github.com/${{ github.repository }} HEAD:main
 
-  run-python-script:  # ✅ correctly indented under `jobs`
+  run-python-script:
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && github.event.schedule == '1 12 * * 3,6,0')
     runs-on: ubuntu-latest
 
@@ -57,7 +57,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install --no-cache-dir openpyxl requests
+          pip install --no-cache-dir openpyxl pandas requests
 
       - name: Run append-to-CSV script
         run: python 4djson_Append_to_Excel.py
