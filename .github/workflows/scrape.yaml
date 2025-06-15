@@ -4,7 +4,7 @@ on:
   schedule:
     - cron: '0 11 * * 3,6,0'  # 7:00 PM SGT (Wed, Sat, Sun)
     - cron: '0 12 * * 3,6,0'  # 8:00 PM SGT
-    - cron: '1 12 * * 3,6,0'  # 8:01 PM SGT (for Python appending script)
+    - cron: '1 12 * * 3,6,0'  # 8:01 PM SGT (for Python scripts)
   workflow_dispatch:
 
 jobs:
@@ -57,15 +57,18 @@ jobs:
       - name: Install dependencies
         run: pip install pandas requests
 
-      - name: Run Python script
+      - name: Run append-to-CSV script
         run: python 4djson_Append_to_Excel.py
 
-      - name: Commit and push updated CSV
+      - name: Run 4D Box script
+        run: python 4dbox_script.py
+
+      - name: Commit and push updated files
         env:
           PAT: ${{ secrets.PAT }}
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
-          git add 4d_results.csv
-          git commit -m "Append 4D draw results to CSV" || echo "No changes to commit"
+          git add .
+          git commit -m "Update with 4D box results" || echo "No changes to commit"
           git push https://x-access-token:${{ secrets.PAT }}@github.com/${{ github.repository }} HEAD:main
