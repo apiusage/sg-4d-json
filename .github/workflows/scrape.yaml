@@ -39,7 +39,7 @@ jobs:
           git commit -m "Update 4D results" || echo "No changes to commit"
           git push https://x-access-token:${{ secrets.PAT }}@github.com/${{ github.repository }} HEAD:main
 
-run-python-script:
+  run-python-script:  # ✅ correctly indented under `jobs`
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && github.event.schedule == '1 12 * * 3,6,0')
     runs-on: ubuntu-latest
 
