@@ -3,6 +3,7 @@ name: Scrape 4D
 on:
   schedule:
     - cron: '0 11 * * 3,6,0'  # 7:00 PM SGT (Wed, Sat, Sun)
+    - cron: '10 11 * * 3,6,0' # 7:10 PM SGT
     - cron: '0 12 * * 3,6,0'  # 8:00 PM SGT
     - cron: '1 12 * * 3,6,0'  # 8:01 PM SGT (for Python scripts)
   workflow_dispatch:
