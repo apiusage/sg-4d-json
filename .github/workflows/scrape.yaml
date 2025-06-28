@@ -41,6 +41,7 @@ jobs:
           git config --global user.email "github-actions@github.com"
           git add 4d.json
           git commit -m "Update 4D results" || echo "No changes to commit"
+          git pull --rebase origin main || true
           git push https://x-access-token:${{ secrets.PAT }}@github.com/${{ github.repository }} HEAD:main
 
   run-python-script:
@@ -77,4 +78,5 @@ jobs:
           git config --global user.email "github-actions@github.com"
           git add .
           git commit -m "Update with 4D box results" || echo "No changes to commit"
+          git pull --rebase origin main || true
           git push https://x-access-token:${{ secrets.PAT }}@github.com/${{ github.repository }} HEAD:main
