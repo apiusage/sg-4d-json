@@ -1,14 +1,14 @@
 {
   "name": "sg4d-scraper",
   "version": "1.0.0",
-  "description": "",
+  "description": "Scraper for SG 4D results",
   "main": "scrape.js",
   "scripts": {
     "scrape": "node scrape.js"
   },
   "dependencies": {
-    "axios": "^1.6.0",
-    "cheerio": "^1.0.0-rc.12"
-    "css-select": "5.1.0"
+    "cheerio": "1.0.0-rc.12",
+    "css-select": "5.1.0",
+    "axios": "^1.6.8"
   }
 }
