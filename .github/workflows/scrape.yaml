@@ -31,9 +31,11 @@ jobs:
           npm install
 
       - name: Run scraper
-        run: npm run scrape
+        run: |
+          npm run scrape  # Will fail the job if it exits with error
 
       - name: Commit and push updated JSON
+        if: success()  # Only run this step if the scraper succeeded
         env:
           PAT: ${{ secrets.PAT }}
         run: |
@@ -46,6 +48,7 @@ jobs:
 
   run-python-script:
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && github.event.schedule == '1 12 * * 3,6,0')
+    needs: run-scraper
     runs-on: ubuntu-latest
 
     steps:
