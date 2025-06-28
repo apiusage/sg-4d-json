@@ -1,5 +1,6 @@
 import requests
 import pandas as pd
+import cheerio from 'cheerio';
 from datetime import datetime
 import os
 
