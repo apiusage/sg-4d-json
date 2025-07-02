@@ -2,10 +2,10 @@ name: Scrape 4D
 
 on:
   schedule:
-    - cron: '0 11 * * 3,6,0'
-    - cron: '10 11 * * 3,6,0'
-    - cron: '0 12 * * 3,6,0'
-    - cron: '1 12 * * 3,6,0'
+    - cron: '0 11 * * 3,6,0'   # Wed, Sat, Sun at 11:00 UTC
+    - cron: '10 11 * * 3,6,0'  # Wed, Sat, Sun at 11:10 UTC
+    - cron: '0 12 * * 3,6,0'   # Wed, Sat, Sun at 12:00 UTC
+    - cron: '1 12 * * 3,6,0'   # Wed, Sat, Sun at 12:01 UTC
   workflow_dispatch:
 
 jobs:
@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup
+      - name: Setup environment
         run: |
           sudo apt update
           sudo apt install -y python3-pip
@@ -36,14 +36,26 @@ jobs:
             npm run scrape
           fi
 
-      - name: Commit & Push
+      - name: Commit & Push changes
         env:
           PAT: ${{ secrets.PAT }}
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
+
+          # Pull latest changes (handle conflicts by rebasing)
           git pull --rebase origin main || true
+
+          # Stage all changes except node_modules and package-lock.json
           git add -A
           git reset node_modules/ package-lock.json || true
-          git commit -m "Auto update" || echo "No changes"
+
+          # Commit if changes exist
+          if ! git diff --cached --quiet; then
+            git commit -m "Auto update"
+          else
+            echo "No changes to commit"
+          fi
+
+          # Push changes using PAT
           git push "https://x-access-token:$PAT@github.com/${{ github.repository }}" HEAD:main
