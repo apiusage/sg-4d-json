@@ -2,83 +2,52 @@ name: Scrape 4D
 
 on:
   schedule:
-    - cron: '0 11 * * 3,6,0'  # 7:00 PM SGT (Wed, Sat, Sun)
-    - cron: '10 11 * * 3,6,0' # 7:10 PM SGT
-    - cron: '0 12 * * 3,6,0'  # 8:00 PM SGT
-    - cron: '1 12 * * 3,6,0'  # 8:01 PM SGT (for Python scripts)
+    - cron: '0 11 * * 3,6,0'   # 7:00 PM SGT
+    - cron: '10 11 * * 3,6,0'  # 7:10 PM SGT
+    - cron: '0 12 * * 3,6,0'   # 8:00 PM SGT
+    - cron: '1 12 * * 3,6,0'   # 8:01 PM SGT
   workflow_dispatch:
 
 jobs:
-  run-scraper:
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && github.triggering_actor != '')
+  scrape:
+    if: github.event.schedule != '1 12 * * 3,6,0' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
-
-      - name: Clean install Node dependencies
-        run: |
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 18 }
+      - run: |
           rm -rf node_modules package-lock.json
           npm cache clean --force
           npm install
-
-      - name: Run scraper
-        run: |
-          npm run scrape  # Will fail the job if it exits with error
-
-      - name: Commit and push updated JSON
-        env:
-          PAT: ${{ secrets.PAT }}
+          npm run scrape
+      - name: Commit scrape results
+        env: { PAT: ${{ secrets.PAT }} }
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
           git add 4d.json
-          git commit -m "Update 4D results" || echo "No changes to commit"
+          git commit -m "Update 4D results" || echo "No changes"
           git pull --rebase origin main || true
           git push https://x-access-token:${{ secrets.PAT }}@github.com/${{ github.repository }} HEAD:main
 
-  run-python-script:
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
-    needs: run-scraper
+  process:
+    if: github.event.schedule == '1 12 * * 3,6,0' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: |
           pip install --no-cache-dir openpyxl pandas requests
-
-      - name: Run append-to-CSV script
-        run: python 4djson_Append_to_Excel.py
-
-      - name: Run 4D Box script
-        run: python 4dbox_script.py
-
-      - name: Commit and push updated files
-        env:
-          PAT: ${{ secrets.PAT }}
+          python 4djson_Append_to_Excel.py
+          python 4dbox_script.py
+      - name: Commit processed results
+        env: { PAT: ${{ secrets.PAT }} }
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
           git add .
-          git commit -m "Update with 4D box results" || echo "No changes to commit"
+          git commit -m "Update with 4D box results" || echo "No changes"
           git pull --rebase origin main || true
           git push https://x-access-token:${{ secrets.PAT }}@github.com/${{ github.repository }} HEAD:main
