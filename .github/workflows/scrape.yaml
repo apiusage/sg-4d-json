@@ -2,10 +2,10 @@ name: Scrape 4D
 
 on:
   schedule:
-    - cron: '0 11 * * 3,6,0'   # 7:00 PM SGT
-    - cron: '10 11 * * 3,6,0'  # 7:10 PM SGT
-    - cron: '0 12 * * 3,6,0'   # 8:00 PM SGT
-    - cron: '1 12 * * 3,6,0'   # 8:01 PM SGT
+    - cron: '0 11 * * 3,6,0'
+    - cron: '10 11 * * 3,6,0'
+    - cron: '0 12 * * 3,6,0'
+    - cron: '1 12 * * 3,6,0'
   workflow_dispatch:
 
 jobs:
@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Setup
         run: |
           sudo apt update
@@ -20,17 +21,23 @@ jobs:
           pip3 install --no-cache-dir openpyxl pandas requests
           curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
           sudo apt install -y nodejs
+          node -v
+          npm -v
           npm install
+
       - name: Run task
         run: |
           TIME=$(date -u +"%H:%M")
+          echo "Current UTC time is $TIME"
           if [[ "$TIME" == "12:01" ]]; then
             python3 4djson_Append_to_Excel.py
             python3 4dbox_script.py
           else
             npm run scrape
+
       - name: Commit & Push
-        env: { PAT: ${{ secrets.PAT }} }
+        env:
+          PAT: ${{ secrets.PAT }}
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
