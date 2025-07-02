@@ -9,45 +9,32 @@ on:
   workflow_dispatch:
 
 jobs:
-  scrape:
-    if: github.event.schedule != '1 12 * * 3,6,0' || github.event_name == 'workflow_dispatch'
+  main:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 18 }
-      - run: |
-          rm -rf node_modules package-lock.json
-          npm cache clean --force
-          npm install
-          npm run scrape
-      - name: Commit scrape results
-        env: { PAT: ${{ secrets.PAT }} }
+      - name: Setup
         run: |
-          git config --global user.name "github-actions"
-          git config --global user.email "github-actions@github.com"
-          git add 4d.json
-          git commit -m "Update 4D results" || echo "No changes"
-          git pull --rebase origin main || true
-          git push https://x-access-token:${{ secrets.PAT }}@github.com/${{ github.repository }} HEAD:main
-
-  process:
-    if: github.event.schedule == '1 12 * * 3,6,0' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: '3.11' }
-      - run: |
-          pip install --no-cache-dir openpyxl pandas requests
-          python 4djson_Append_to_Excel.py
-          python 4dbox_script.py
-      - name: Commit processed results
+          sudo apt update
+          sudo apt install -y python3-pip
+          pip3 install --no-cache-dir openpyxl pandas requests
+          curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+          sudo apt install -y nodejs
+          npm install
+      - name: Run task
+        run: |
+          TIME=$(date -u +"%H:%M")
+          if [[ "$TIME" == "12:01" ]]; then
+            python3 4djson_Append_to_Excel.py
+            python3 4dbox_script.py
+          else
+            npm run scrape
+      - name: Commit & Push
         env: { PAT: ${{ secrets.PAT }} }
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
           git add .
-          git commit -m "Update with 4D box results" || echo "No changes"
+          git commit -m "Auto update" || echo "No changes"
           git pull --rebase origin main || true
           git push https://x-access-token:${{ secrets.PAT }}@github.com/${{ github.repository }} HEAD:main
