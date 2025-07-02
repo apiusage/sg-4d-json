@@ -2,33 +2,31 @@ name: Scrape 4D
 
 on:
   schedule:
-    - cron: '0 11 * * 3,6,0'   # Wed, Sat, Sun at 11:00 UTC
-    - cron: '10 11 * * 3,6,0'  # Wed, Sat, Sun at 11:10 UTC
-    - cron: '0 12 * * 3,6,0'   # Wed, Sat, Sun at 12:00 UTC
-    - cron: '1 12 * * 3,6,0'   # Wed, Sat, Sun at 12:01 UTC
+    - cron: '0 11 * * 3,6,0'    # 7:00 PM SGT
+    - cron: '10 11 * * 3,6,0'   # 7:10 PM SGT
+    - cron: '0 12 * * 3,6,0'    # 8:00 PM SGT
+    - cron: '1 12 * * 3,6,0'    # 8:01 PM SGT
   workflow_dispatch:
 
 jobs:
-  main:
+  scrape4d:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup environment
+      - name: Setup
         run: |
           sudo apt update
           sudo apt install -y python3-pip
-          pip3 install --no-cache-dir openpyxl pandas requests
+          pip3 install openpyxl pandas requests
           curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
           sudo apt install -y nodejs
-          node -v
-          npm -v
           npm install
 
       - name: Run task
         run: |
           TIME=$(date -u +"%H:%M")
-          echo "Current UTC time is $TIME"
+          echo "UTC time: $TIME"
           if [[ "$TIME" == "12:01" ]]; then
             python3 4djson_Append_to_Excel.py
             python3 4dbox_script.py
@@ -36,26 +34,13 @@ jobs:
             npm run scrape
           fi
 
-      - name: Commit & Push changes
+      - name: Commit & Push
         env:
           PAT: ${{ secrets.PAT }}
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
-
-          # Pull latest changes (handle conflicts by rebasing)
           git pull --rebase origin main || true
-
-          # Stage all changes except node_modules and package-lock.json
-          git add -A
-          git reset node_modules/ package-lock.json || true
-
-          # Commit if changes exist
-          if ! git diff --cached --quiet; then
-            git commit -m "Auto update"
-          else
-            echo "No changes to commit"
-          fi
-
-          # Push changes using PAT
-          git push https://x-access-token:${{ secrets.PAT }}@github.com/${{ github.repository }} HEAD:main
+          git add .
+          git commit -m "Auto update" || echo "No changes"
+          git push https://x-access-token:$PAT@github.com/${{ github.repository }} HEAD:main
