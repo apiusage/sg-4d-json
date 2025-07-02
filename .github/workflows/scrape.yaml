@@ -2,10 +2,10 @@ name: Scrape 4D
 
 on:
   schedule:
-    - cron: '0 11 * * 3,6,0'    # 7:00 PM SGT
-    - cron: '10 11 * * 3,6,0'   # 7:10 PM SGT
-    - cron: '0 12 * * 3,6,0'    # 8:00 PM SGT
-    - cron: '1 12 * * 3,6,0'    # 8:01 PM SGT
+    - cron: '0 11 * * 3,6,0'    # 7:00 PM SGT (npm run scrape)
+    - cron: '10 11 * * 3,6,0'   # 7:10 PM SGT (npm run scrape)
+    - cron: '0 12 * * 3,6,0'    # 8:00 PM SGT (npm run scrape)
+    - cron: '1 12 * * 3,6,0'    # 8:01 PM SGT (Python scripts)
   workflow_dispatch:
 
 jobs:
@@ -25,12 +25,13 @@ jobs:
 
       - name: Run task
         run: |
-          TIME=$(date -u +"%H:%M")
-          echo "UTC time: $TIME"
-          if [[ "$TIME" == "12:01" ]]; then
+          echo "Triggered by: ${{ github.event.schedule }}"
+          if [[ "${{ github.event.schedule }}" == "1 12 * * 3,6,0" ]]; then
+            echo "Running Python scripts..."
             python3 4djson_Append_to_Excel.py
             python3 4dbox_script.py
           else
+            echo "Running npm scrape..."
             npm run scrape
           fi
 
@@ -41,6 +42,6 @@ jobs:
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
           git pull --rebase origin main || true
-          git add .
+          git add -f 4d_results.csv 4d_box_output.xlsx 4d.json || true
           git commit -m "Auto update" || echo "No changes"
           git push https://x-access-token:$PAT@github.com/${{ github.repository }} HEAD:main
