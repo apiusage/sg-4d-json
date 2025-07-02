@@ -46,4 +46,4 @@ jobs:
           git add -A
           git reset node_modules/ package-lock.json || true
           git commit -m "Auto update" || echo "No changes"
-          git push https://x-access-token:${PAT}@github.com/${{ github.repository }} HEAD:main
+          git push "https://x-access-token:$PAT@github.com/${{ github.repository }}" HEAD:main
