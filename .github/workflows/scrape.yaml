@@ -42,7 +42,9 @@ jobs:
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
+          # Set remote URL to use PAT for authentication
+          git remote set-url origin https://x-access-token:${PAT}@github.com/${{ github.repository }}
+          git pull --rebase origin main || true
           git add .
           git commit -m "Auto update" || echo "No changes"
-          git pull --rebase origin main || true
-          git push https://x-access-token:${{ secrets.PAT }}@github.com/${{ github.repository }} HEAD:main
+          git push origin main
