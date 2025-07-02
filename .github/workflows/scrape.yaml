@@ -42,11 +42,8 @@ jobs:
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
-          # Authenticate git commands with PAT
-          git remote set-url origin https://x-access-token:${PAT}@github.com/${{ github.repository }}
           git pull --rebase origin main || true
           git add -A
-          # Unstage node_modules and package-lock.json if added accidentally
           git reset node_modules/ package-lock.json || true
           git commit -m "Auto update" || echo "No changes"
-          git push origin main
+          git push https://x-access-token:${PAT}@github.com/${{ github.repository }} HEAD:main
