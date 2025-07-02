@@ -7,6 +7,15 @@ on:
     - cron: '0 12 * * 3,6,0'    # 8:00 PM SGT (npm run scrape)
     - cron: '1 12 * * 3,6,0'    # 8:01 PM SGT (Python scripts)
   workflow_dispatch:
+    inputs:
+      task:
+        description: "Which task to run?"
+        required: true
+        default: "scrape"
+        type: choice
+        options:
+          - scrape
+          - python
 
 jobs:
   scrape4d:
@@ -25,8 +34,10 @@ jobs:
 
       - name: Run task
         run: |
-          echo "Triggered by: ${{ github.event.schedule }}"
-          if [[ "${{ github.event.schedule }}" == "1 12 * * 3,6,0" ]]; then
+          echo "Triggered by schedule: '${{ github.event.schedule }}'"
+          echo "Manual input task: '${{ github.event.inputs.task }}'"
+
+          if [[ "${{ github.event.schedule }}" == "1 12 * * 3,6,0" || "${{ github.event.inputs.task }}" == "python" ]]; then
             echo "Running Python scripts..."
             python3 4djson_Append_to_Excel.py
             python3 4dbox_script.py
