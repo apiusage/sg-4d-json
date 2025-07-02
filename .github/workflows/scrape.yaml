@@ -34,6 +34,7 @@ jobs:
             python3 4dbox_script.py
           else
             npm run scrape
+          fi
 
       - name: Commit & Push
         env:
