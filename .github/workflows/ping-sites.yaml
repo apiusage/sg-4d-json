@@ -1,0 +1,15 @@
+name: Ping Multiple URLs Every 30 Minutes
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'  # Every 30 minutes
+  workflow_dispatch:  # Optional: allows manual trigger from GitHub UI
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping All URLs
+        run: |
+          curl -s https://apiusage-4danalyzer-main-z9fynz.streamlit.app/ || true
+          curl -s https://cryptoanalyzer-j92kytncetjxksx5siflxf.streamlit.app/ || true
