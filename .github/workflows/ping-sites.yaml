@@ -1,15 +1,26 @@
-name: Ping Multiple URLs Every 30 Minutes
+name: Keep Streamlit Awake
 
 on:
   schedule:
-    - cron: '*/30 * * * *'  # Every 30 minutes
-  workflow_dispatch:  # Optional: allows manual trigger from GitHub UI
+    - cron: '*/25 * * * *'
+  workflow_dispatch:
 
 jobs:
-  ping:
+  keep-awake:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping All URLs
-        run: |
-          curl -s https://apiusage-4danalyzer-main-z9fynz.streamlit.app/ || true
-          curl -s https://cryptoanalyzer-j92kytncetjxksx5siflxf.streamlit.app/ || true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: |
+          npm install playwright
+          npx playwright install chromium
+          node -e "
+          const { chromium } = require('playwright');
+          (async () => {
+            const browser = await chromium.launch();
+            const page = await browser.newPage();
+            await page.goto('https://apiusage-4danalyzer-main-z9fynz.streamlit.app/', { waitUntil: 'domcontentloaded' });
+            await page.goto('https://cryptoanalyzer-j92kytncetjxksx5siflxf.streamlit.app/', { waitUntil: 'domcontentloaded' });
+            await browser.close();
+          })();"
