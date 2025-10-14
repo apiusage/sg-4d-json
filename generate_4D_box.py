@@ -36,21 +36,21 @@ for pos_dict in position_counts:
 # --- Deterministic digit selection ---
 def select_digit(prob_dict, exclude_row, exclude_col, digit_column_count):
     available = {d: p for d, p in prob_dict.items()
-                 if d not in exclude_row and d not in exclude_col and digit_column_count.get(d,0)<2}
+                 if d not in exclude_row and d not in exclude_col and digit_column_count.get(d, 0) < 2}
     if not available:
-        choices = [d for d in range(10) if d not in exclude_row and d not in exclude_col and digit_column_count.get(d,0)<2]
-        return choices[0]
+        choices = [d for d in range(10) if d not in exclude_row and d not in exclude_col and digit_column_count.get(d, 0) < 2]
+        return choices[0] if choices else 0
     return max(available, key=available.get)
 
 # --- Generate deterministic 4x4 box ---
 def generate_box():
-    box = [[-1]*4 for _ in range(4)]
+    box = [[-1] * 4 for _ in range(4)]
     col_digits_list = [[] for _ in range(4)]
     digit_column_count = {}
 
     for r in range(4):
         for c in range(4):
-            pos = r*4 + c
+            pos = r * 4 + c
             exclude_row = box[r]
             exclude_col = col_digits_list[c]
             digit = select_digit(position_probs[pos], exclude_row, exclude_col, digit_column_count)
@@ -66,7 +66,7 @@ def generate_box():
         for r in range(4):
             for c in range(4):
                 current_digit = box[r][c]
-                if flat_box.count(current_digit) > 1 and digit_column_count.get(d,0)<2:
+                if flat_box.count(current_digit) > 1 and digit_column_count.get(d, 0) < 2:
                     col_digits_list[c].remove(current_digit)
                     box[r][c] = d
                     col_digits_list[c].append(d)
@@ -82,10 +82,10 @@ def generate_box():
 predicted_box = generate_box()
 print("Predicted 4x4 Box (unique columns, max 2 columns per digit):")
 for row in predicted_box:
-    print(row)
+    print('  '.join(str(d) for d in row))  # <-- 2 spaces per digit
 
-# --- Prepare string for Excel ---
-box_str = '\n'.join(' '.join(str(d) for d in row) for row in predicted_box)
+# --- Prepare string for Excel (2 spaces per digit) ---
+box_str = '\n'.join('  '.join(str(d) for d in row) for row in predicted_box)
 date_str = datetime.today().strftime("%d/%m/%Y (%a)")
 
 # --- Save to Excel ---
@@ -101,7 +101,7 @@ if ws.max_row == 1:
 
 ws['A2'], ws['B2'] = date_str, box_str
 ws['B2'].alignment = Alignment(wrapText=True)
-ws.column_dimensions['B'].width = 20
+ws.column_dimensions['B'].width = 25
 
 wb.save(fn)
 print(f"✅ 4x4 box generated and saved to '{fn}' in sheet '{sheet_name}'.")
