@@ -1,7 +1,7 @@
 import pandas as pd, os, requests
 from collections import defaultdict
 from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Alignment
+from openpyxl.styles import Alignment, Font
 from datetime import datetime
 from io import BytesIO
 
@@ -30,7 +30,7 @@ for box in boxes:
 position_probs = []
 for pos_dict in position_counts:
     total = sum(pos_dict.values())
-    probs = {digit: count/total for digit, count in pos_dict.items()} if total > 0 else {}
+    probs = {digit: count / total for digit, count in pos_dict.items()} if total > 0 else {}
     position_probs.append(probs)
 
 # --- Deterministic digit selection ---
@@ -38,7 +38,8 @@ def select_digit(prob_dict, exclude_row, exclude_col, digit_column_count):
     available = {d: p for d, p in prob_dict.items()
                  if d not in exclude_row and d not in exclude_col and digit_column_count.get(d, 0) < 2}
     if not available:
-        choices = [d for d in range(10) if d not in exclude_row and d not in exclude_col and digit_column_count.get(d, 0) < 2]
+        choices = [d for d in range(10)
+                   if d not in exclude_row and d not in exclude_col and digit_column_count.get(d, 0) < 2]
         return choices[0] if choices else 0
     return max(available, key=available.get)
 
@@ -59,7 +60,7 @@ def generate_box():
             cols_with_digit = [i for i, col in enumerate(col_digits_list) if digit in col]
             digit_column_count[digit] = len(cols_with_digit)
 
-    # ensure all digits 0-9 appear at least once
+    # ensure all digits 0–9 appear at least once
     flat_box = [d for row in box for d in row]
     missing_digits = [d for d in range(10) if d not in flat_box]
     for d in missing_digits:
@@ -71,7 +72,9 @@ def generate_box():
                     box[r][c] = d
                     col_digits_list[c].append(d)
                     flat_box = [x for row in box for x in row]
-                    digit_column_count[d] = len([i for i, col in enumerate(col_digits_list) if d in col])
+                    digit_column_count[d] = len(
+                        [i for i, col in enumerate(col_digits_list) if d in col]
+                    )
                     break
             if d in flat_box:
                 break
@@ -82,15 +85,16 @@ def generate_box():
 predicted_box = generate_box()
 print("Predicted 4x4 Box (unique columns, max 2 columns per digit):")
 for row in predicted_box:
-    print('  '.join(str(d) for d in row))  # <-- 2 spaces per digit
+    print('  '.join(str(d) for d in row))  # 2 spaces per digit for readability
 
-# --- Prepare string for Excel (2 spaces per digit) ---
-box_str = '\n'.join('  '.join(str(d) for d in row) for row in predicted_box)
+# --- Prepare string for Excel (2 spaces per digit + safe newline) ---
+box_str = '\n'.join('  '.join(str(d) for d in row) for row in predicted_box) + '\n'
 date_str = datetime.today().strftime("%d/%m/%Y (%a)")
 
 # --- Save to Excel ---
 fn = "4d_box_output.xlsx"
 sheet_name = "Predicted_Box"
+
 wb = load_workbook(fn) if os.path.exists(fn) else Workbook()
 ws = wb[sheet_name] if sheet_name in wb.sheetnames else wb.create_sheet(sheet_name)
 
@@ -99,9 +103,13 @@ ws.insert_rows(2)
 if ws.max_row == 1:
     ws['A1'], ws['B1'], ws['C1'] = "Date", "4x4 Box", "Stats"
 
-ws['A2'], ws['B2'] = date_str, box_str
-ws['B2'].alignment = Alignment(wrapText=True)
-ws.column_dimensions['B'].width = 25
+# Write safe text (no leading apostrophe, no truncation)
+ws['A2'] = date_str
+ws['B2'] = box_str.strip()
+ws['B2'].number_format = '@'  # Force plain text
+ws['B2'].alignment = Alignment(wrapText=True, vertical="top")
+ws['B2'].font = Font(name="Courier New")  # Monospace font = perfect alignment on mobile
+ws.column_dimensions['B'].width = 28
 
 wb.save(fn)
 print(f"✅ 4x4 box generated and saved to '{fn}' in sheet '{sheet_name}'.")
