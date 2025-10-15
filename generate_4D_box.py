@@ -5,21 +5,41 @@ from openpyxl.styles import Alignment, Font
 from datetime import datetime
 from io import BytesIO
 
+# ----------------- CONFIG -----------------
+GITHUB_EXCEL_URL = "https://github.com/apiusage/sg-4d-json/raw/main/4d_box_output.xlsx"
+DESIRED_SHEET_NAME = "Perfect_4DBox"   # <-- sheet to read from GitHub
+OUTPUT_FILE = "4d_box_output.xlsx"
+OUTPUT_SHEET = "Predicted_Box"          # <-- Save new predicted boxes here
+# -----------------------------------------
+
 # --- Load past boxes from GitHub Excel ---
-excel_url = "https://github.com/apiusage/sg-4d-json/raw/main/4d_box_output.xlsx"
-resp = requests.get(excel_url)
+resp = requests.get(GITHUB_EXCEL_URL, timeout=10)
 resp.raise_for_status()
-df = pd.read_excel(BytesIO(resp.content))
-col_values = df.iloc[:, 1].dropna().tolist()
+xls = pd.ExcelFile(BytesIO(resp.content))
+
+# Clean sheet names to avoid hidden characters
+sheet_names_clean = [name.strip() for name in xls.sheet_names]
+
+if DESIRED_SHEET_NAME not in sheet_names_clean:
+    print(f"⚠ Sheet '{DESIRED_SHEET_NAME}' not found. Script will exit without generating box.")
+    exit()
+
+# Exact sheet name match
+idx = sheet_names_clean.index(DESIRED_SHEET_NAME)
+PAST_SHEET_NAME = xls.sheet_names[idx]
+
+df = pd.read_excel(BytesIO(resp.content), sheet_name=PAST_SHEET_NAME)
+print(f"✅ Loaded sheet '{PAST_SHEET_NAME}' successfully. Total rows: {len(df)}")
 
 # --- Flatten boxes into digits ---
+col_values = df.iloc[:, 1].dropna().tolist()  # 2nd column
 boxes = []
 for box in col_values:
     digits = [int(d) for d in ''.join(filter(str.isdigit, str(box)))]
     if digits:
         boxes.append(digits)
 
-print(f"Total past boxes read: {len(boxes)}")
+print(f"Total past boxes read from '{PAST_SHEET_NAME}': {len(boxes)}")
 
 # --- Compute position-wise frequencies ---
 position_counts = [defaultdict(int) for _ in range(16)]
@@ -85,31 +105,28 @@ def generate_box():
 predicted_box = generate_box()
 print("Predicted 4x4 Box (unique columns, max 2 columns per digit):")
 for row in predicted_box:
-    print('  '.join(str(d) for d in row))  # 2 spaces per digit for readability
+    print('  '.join(str(d) for d in row))  # 2 spaces per digit
 
-# --- Prepare string for Excel (2 spaces per digit + safe newline) ---
+# --- Prepare string for Excel ---
 box_str = '\n'.join('  '.join(str(d) for d in row) for row in predicted_box) + '\n'
 date_str = datetime.today().strftime("%d/%m/%Y (%a)")
 
 # --- Save to Excel ---
-fn = "4d_box_output.xlsx"
-sheet_name = "Predicted_Box"
-
-wb = load_workbook(fn) if os.path.exists(fn) else Workbook()
-ws = wb[sheet_name] if sheet_name in wb.sheetnames else wb.create_sheet(sheet_name)
+wb = load_workbook(OUTPUT_FILE) if os.path.exists(OUTPUT_FILE) else Workbook()
+ws = wb[OUTPUT_SHEET] if OUTPUT_SHEET in wb.sheetnames else wb.create_sheet(OUTPUT_SHEET)
 
 # Insert new row at top
 ws.insert_rows(2)
 if ws.max_row == 1:
     ws['A1'], ws['B1'], ws['C1'] = "Date", "4x4 Box", "Stats"
 
-# Write safe text (no leading apostrophe, no truncation)
+# Write safe text (monospace font + wrap text)
 ws['A2'] = date_str
 ws['B2'] = box_str.strip()
 ws['B2'].number_format = '@'  # Force plain text
 ws['B2'].alignment = Alignment(wrapText=True, vertical="top")
-ws['B2'].font = Font(name="Courier New")  # Monospace font = perfect alignment on mobile
+ws['B2'].font = Font(name="Courier New")  # Monospace = perfect alignment on mobile
 ws.column_dimensions['B'].width = 28
 
-wb.save(fn)
-print(f"✅ 4x4 box generated and saved to '{fn}' in sheet '{sheet_name}'.")
+wb.save(OUTPUT_FILE)
+print(f"✅ 4x4 box generated and saved to '{OUTPUT_FILE}' in sheet '{OUTPUT_SHEET}'.")
