@@ -1,11 +1,16 @@
 from collections import Counter
 from typing import List
 from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
+from openpyxl.styles import Alignment
 from datetime import datetime
 import os
 import itertools
 import requests
+
+# ----------------- CONFIG -----------------
+SHEET_NAME = "Perfect_4DBox"  # <-- change this anytime
+FILE_NAME = "4d_box_output.xlsx"
+# -----------------------------------------
 
 def generate_permutations(box_digits: List[str], pool=16, num=4) -> List[str]:
     perms = list(itertools.permutations(range(num)))  # 24 permutations of 4 digits
@@ -58,16 +63,19 @@ def generate_4d_box(numbers: List[str]) -> List[List[str]]:
 
     return box
 
-# Step 1: Fetch numbers from JSON
+# ----------------- Fetch numbers -----------------
 try:
-    response = requests.get("https://raw.githubusercontent.com/apiusage/sg-4d-json/refs/heads/main/4d.json", timeout=10)
+    response = requests.get(
+        "https://raw.githubusercontent.com/apiusage/sg-4d-json/refs/heads/main/4d.json",
+        timeout=10
+    )
     response.raise_for_status()
     numbers = response.json()
 except Exception as e:
     print(f"❌ Failed to fetch numbers: {e}")
     numbers = []
 
-# Step 2: Generate box
+# ----------------- Generate box -----------------
 box = generate_4d_box(numbers)
 box_str = '\n'.join(' '.join(row) for row in box)
 print(box_str)
@@ -75,32 +83,34 @@ print(box_str)
 flat_box = [digit for row in box for digit in row]
 permutations = generate_permutations(flat_box)
 
-# Step 3: iBet and Direct matching
+# ----------------- iBet and Direct matching -----------------
 dedup_count = len(set(''.join(sorted(p)) for p in permutations))
 unique_permutations_count = len(set(permutations))
 matched = [num for num in numbers if num in permutations]
 
-# Step 4: Stats
 direct_percent = len(matched) / unique_permutations_count * 100 if unique_permutations_count else 0
 ibet_percent = len(matched) / dedup_count * 100 if dedup_count else 0
 direct_string = f"✅ Direct: {len(matched)}/{unique_permutations_count} ({direct_percent:.2f}%)"
 ibet_string = f"✅ iBet: {len(matched)}/{dedup_count} ({ibet_percent:.2f}%)"
 
-# Step 5: Format date like 15/6/2025 (Sun)
+# ----------------- Format date -----------------
 today = datetime.today()
 date_str = today.strftime("%d/%m/%Y (%a)")
 date_str = '/'.join(part.lstrip('0') if i < 2 else part for i, part in enumerate(date_str.split('/')))
 
-# Step 6: Excel setup
-file_name = "4d_box_output.xlsx"
-if os.path.exists(file_name):
-    wb = load_workbook(file_name)
-    ws = wb.active
+# ----------------- Excel setup -----------------
+if os.path.exists(FILE_NAME):
+    wb = load_workbook(FILE_NAME)
 else:
     wb = Workbook()
-    ws = wb.active
 
-# Step 7: Write to Excel
+# Declare or create the sheet once using variable
+if SHEET_NAME in wb.sheetnames:
+    ws = wb[SHEET_NAME]
+else:
+    ws = wb.create_sheet(SHEET_NAME)
+
+# ----------------- Write to Excel -----------------
 ws.insert_rows(2)
 ws.cell(row=2, column=1, value=date_str)
 ws.cell(row=2, column=2, value=box_str)
@@ -112,6 +122,6 @@ ws.column_dimensions['B'].width = 20
 ws.column_dimensions['C'].width = 30
 ws.row_dimensions[2].height = None
 
-# Step 8: Save
-wb.save(file_name)
-print(f"✅ 4D box inserted at row 2 of '{file_name}'")
+# ----------------- Save -----------------
+wb.save(FILE_NAME)
+print(f"✅ 4D box inserted at row 2 of sheet '{SHEET_NAME}' in '{FILE_NAME}'")
