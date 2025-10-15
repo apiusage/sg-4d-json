@@ -2,6 +2,8 @@ name: Scrape 4D
 
 on:
   schedule:
+    - cron: '30 10 * * 3,6,0'   # 6:30 PM SGT (npm run scrape)
+    - cron: '40 10 * * 3,6,0'   # 6:40 PM SGT (npm run scrape)
     - cron: '0 11 * * 3,6,0'    # 7:00 PM SGT (npm run scrape)
     - cron: '10 11 * * 3,6,0'   # 7:10 PM SGT (npm run scrape)
     - cron: '0 12 * * 3,6,0'    # 8:00 PM SGT (npm run scrape)
