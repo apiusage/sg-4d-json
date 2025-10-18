@@ -1,128 +1,225 @@
-from collections import Counter
+import os, itertools, requests, pandas as pd
+from collections import Counter, defaultdict
 from typing import List
 from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Alignment
+from openpyxl.styles import Alignment, Font
 from datetime import datetime
-import os
-import itertools
-import requests
+from io import BytesIO
 
-# ----------------- CONFIG -----------------
-SHEET_NAME = "Perfect_4DBox" 
-FILE_NAME = "4d_box_output.xlsx"
-# -----------------------------------------
+# ------------------- Function 1: Generate & insert 4D box -------------------
+def run_4d_box(sheet_name="Perfect_4DBox", file_name="4d_box_output.xlsx"):
+    """Fetch latest 4D numbers, generate a 4x4 box, calculate stats, and save to Excel."""
 
-def generate_permutations(box_digits: List[str], pool=16, num=4) -> List[str]:
-    perms = list(itertools.permutations(range(num)))  # 24 permutations of 4 digits
-    results = []
+    # Generate all permutations for iBet calculation
+    def generate_perms(box_digits: List[str]) -> List[str]:
+        perms = list(itertools.permutations(range(4)))  # all 24 permutations
+        res = []
+        for i, j, k, l in itertools.product(range(0,16,4), range(1,16,4), range(2,16,4), range(3,16,4)):
+            if max(i,j,k,l) < 16:
+                g = [box_digits[i], box_digits[j], box_digits[k], box_digits[l]]
+                res += [''.join(g[idx] for idx in p) for p in perms]
+        return res
 
-    for i in range(0, pool, num):
-        for j in range(1, pool, num):
-            for k in range(2, pool, num):
-                for l in range(3, pool, num):
-                    if max(i, j, k, l) < pool:
-                        group = [box_digits[i], box_digits[j], box_digits[k], box_digits[l]]
-                        for p in perms:
-                            results.append(''.join(group[idx] for idx in p))
-    return results
+    # Generate 4x4 box based on most frequent digits by position
+    def generate_box(numbers: List[str]) -> List[List[str]]:
+        numbers = [str(n).zfill(4) for n in numbers]
+        counters = [Counter() for _ in range(4)]
+        for num in numbers:
+            for i, d in enumerate(num):
+                counters[i][d] += 1
 
-def generate_4d_box(numbers: List[str]) -> List[List[str]]:
-    numbers = [str(num).zfill(4) for num in numbers]
-    position_counters = [Counter() for _ in range(4)]
+        # Top 4 digits per column
+        tops = [[d for d,_ in c.most_common(4)] for c in counters]
 
-    for num in numbers:
-        for i, digit in enumerate(num):
-            position_counters[i][digit] += 1
+        # Create 4x4 box
+        box = [[tops[col][row] for col in range(4)] for row in range(4)]
+        flat = [d for row in box for d in row]
 
-    top_digits_by_position = [
-        [digit for digit, _ in counter.most_common(4)]
-        for counter in position_counters
-    ]
-
-    box = [
-        [top_digits_by_position[col][row] for col in range(4)]
-        for row in range(4)
-    ]
-
-    flat = [digit for row in box for digit in row]
-    all_digits = set('0123456789')
-    used_digits = set(flat)
-    missing_digits = sorted(all_digits - used_digits)
-
-    if missing_digits:
-        replace_idx = 15
-        for missing in missing_digits:
-            while replace_idx >= 0:
-                r, c = divmod(replace_idx, 4)
-                current = box[r][c]
-                if flat.count(current) > 1:
-                    box[r][c] = missing
-                    flat[replace_idx] = missing
+        # Fill missing digits to ensure 0-9 appear
+        missing = sorted(set('0123456789') - set(flat))
+        idx = 15
+        for m in missing:
+            while idx >= 0:
+                r, c = divmod(idx, 4)
+                if flat.count(box[r][c]) > 1:
+                    box[r][c] = m
+                    flat[idx] = m
                     break
-                replace_idx -= 1
+                idx -= 1
+        return box
 
-    return box
+    # Fetch latest 4D numbers
+    try:
+        numbers = requests.get(
+            "https://raw.githubusercontent.com/apiusage/sg-4d-json/refs/heads/main/4d.json",
+            timeout=10
+        ).json()
+    except:
+        numbers = []
 
-# ----------------- Fetch numbers -----------------
-try:
-    response = requests.get(
-        "https://raw.githubusercontent.com/apiusage/sg-4d-json/refs/heads/main/4d.json",
-        timeout=10
-    )
-    response.raise_for_status()
-    numbers = response.json()
-except Exception as e:
-    print(f"❌ Failed to fetch numbers: {e}")
-    numbers = []
+    # Generate box and print
+    box = generate_box(numbers)
+    print("Generated 4x4 Box:")
+    print('\n'.join(' '.join(row) for row in box))
 
-# ----------------- Generate box -----------------
-box = generate_4d_box(numbers)
-box_str = '\n'.join(' '.join(row) for row in box)
-print(box_str)
+    # Calculate permutations and stats
+    flat_box = [d for row in box for d in row]
+    perms = generate_perms(flat_box)
+    dedup = len(set(''.join(sorted(p)) for p in perms))
+    unique = len(set(perms))
+    matched = [n for n in numbers if n in perms]
 
-flat_box = [digit for row in box for digit in row]
-permutations = generate_permutations(flat_box)
+    # Format date
+    today = datetime.today()
+    date_str = today.strftime("%d/%m/%Y (%a)")
+    date_str = '/'.join(p.lstrip('0') if i < 2 else p for i, p in enumerate(date_str.split('/')))
 
-# ----------------- iBet and Direct matching -----------------
-dedup_count = len(set(''.join(sorted(p)) for p in permutations))
-unique_permutations_count = len(set(permutations))
-matched = [num for num in numbers if num in permutations]
+    # Save to Excel
+    if os.path.exists(file_name):
+        wb = load_workbook(file_name)
+    else:
+        wb = Workbook()
 
-direct_percent = len(matched) / unique_permutations_count * 100 if unique_permutations_count else 0
-ibet_percent = len(matched) / dedup_count * 100 if dedup_count else 0
-direct_string = f"✅ Direct: {len(matched)}/{unique_permutations_count} ({direct_percent:.2f}%)"
-ibet_string = f"✅ iBet: {len(matched)}/{dedup_count} ({ibet_percent:.2f}%)"
+    ws = wb[sheet_name] if sheet_name in wb.sheetnames else wb.create_sheet(sheet_name)
+    ws.insert_rows(2)
+    ws.cell(2, 1, date_str)
+    ws.cell(2, 2, '\n'.join(' '.join(row) for row in box))
+    ws.cell(2, 3, f"✅ Direct: {len(matched)}/{unique} ({len(matched)/unique*100:.2f}%)\n"
+                    f"✅ iBet: {len(matched)}/{dedup} ({len(matched)/dedup*100:.2f}%)")
+    ws.cell(2, 2).alignment = ws.cell(2, 3).alignment = Alignment(wrapText=True)
+    ws.column_dimensions['A'].width = 16
+    ws.column_dimensions['B'].width = 20
+    ws.column_dimensions['C'].width = 30
 
-# ----------------- Format date -----------------
-today = datetime.today()
-date_str = today.strftime("%d/%m/%Y (%a)")
-date_str = '/'.join(part.lstrip('0') if i < 2 else part for i, part in enumerate(date_str.split('/')))
+    wb.save(file_name)
+    print(f"✅ 4D box inserted at row 2 of '{sheet_name}' in '{file_name}'")
 
-# ----------------- Excel setup -----------------
-if os.path.exists(FILE_NAME):
-    wb = load_workbook(FILE_NAME)
-else:
-    wb = Workbook()
 
-# Declare or create the sheet once using variable
-if SHEET_NAME in wb.sheetnames:
-    ws = wb[SHEET_NAME]
-else:
-    ws = wb.create_sheet(SHEET_NAME)
+# ------------------- Function 2: Update stats for predicted boxes -------------------
+def update_4d_box_stats(file_name="4d_box_output.xlsx", sheet_name="Predicted_Box"):
+    """Update iBet/Direct stats for all predicted boxes in Excel."""
+    try:
+        past = [str(n).zfill(4) for n in requests.get(
+            "https://raw.githubusercontent.com/apiusage/sg-4d-json/refs/heads/main/4d.json",
+            timeout=10
+        ).json()]
+    except:
+        past = []
 
-# ----------------- Write to Excel -----------------
-ws.insert_rows(2)
-ws.cell(row=2, column=1, value=date_str)
-ws.cell(row=2, column=2, value=box_str)
-ws.cell(row=2, column=3, value=f"{direct_string}\n{ibet_string}")
-ws.cell(row=2, column=2).alignment = Alignment(wrapText=True)
-ws.cell(row=2, column=3).alignment = Alignment(wrapText=True)
-ws.column_dimensions['A'].width = 16
-ws.column_dimensions['B'].width = 20
-ws.column_dimensions['C'].width = 30
-ws.row_dimensions[2].height = None
+    if not os.path.exists(file_name):
+        return
 
-# ----------------- Save -----------------
-wb.save(FILE_NAME)
-print(f"✅ 4D box inserted at row 2 of sheet '{SHEET_NAME}' in '{FILE_NAME}'")
+    wb = load_workbook(file_name)
+    if sheet_name not in wb.sheetnames:
+        return
 
+    ws = wb[sheet_name]
+
+    for r in range(2, ws.max_row + 1):
+        b = ws[f"B{r}"].value
+        s = ws[f"C{r}"]
+        if not b or s.value:
+            continue
+
+        # Flatten box digits
+        flat = [d for d in b if d.isdigit()]
+
+        # Generate all permutations
+        perms = []
+        for i, j, k, l in itertools.product(range(0,16,4), range(1,16,4), range(2,16,4), range(3,16,4)):
+            if max(i,j,k,l) < 16:
+                g = [flat[i], flat[j], flat[k], flat[l]]
+                perms += [''.join(p) for p in itertools.permutations(g)]
+
+        # Stats
+        dedup = len(set(''.join(sorted(p)) for p in perms))
+        unique = len(set(perms))
+        direct = sum(1 for n in past if n in perms)
+        ibet = len({n for n in past if ''.join(sorted(n)) in {''.join(sorted(p)) for p in perms}})
+
+        s.value = (f"▶ iBet: {ibet}/{dedup} ({ibet/dedup*100:.2f}%)\n"
+                   f"▶ Direct: {direct}/{unique} ({direct/unique*100:.2f}%)\n"
+                   f"▶ Total Sets hit: {direct}")
+        s.alignment = Alignment(wrapText=True)
+
+    wb.save(file_name)
+    print(f"✅ Stats updated in column C of '{file_name}'")
+
+
+# ------------------- Function 3: Generate predicted box from GitHub/local -------------------
+def generate_predicted_box_from_github():
+    """Generate a new 4x4 predicted box from historical boxes (local or GitHub)."""
+    LOCAL = "4d_box_output.xlsx"
+    SHEET = "Perfect_4DBox"
+    OUT = "Predicted_Box"
+    URL = "https://github.com/apiusage/sg-4d-json/raw/main/4d_box_output.xlsx"
+
+    # Load past boxes
+    if os.path.exists(LOCAL):
+        df = pd.read_excel(LOCAL, sheet_name=SHEET)
+    else:
+        resp = requests.get(URL, timeout=10)
+        resp.raise_for_status()
+        xls = pd.ExcelFile(BytesIO(resp.content))
+        if SHEET not in xls.sheet_names:
+            return
+        df = pd.read_excel(BytesIO(resp.content), sheet_name=SHEET)
+
+    # Flatten boxes into digits
+    col = df.iloc[:, 1].dropna().tolist()
+    boxes = []
+    for b in col:
+        digits = [int(d) for d in ''.join(filter(str.isdigit, str(b)))]
+        if digits:
+            boxes.append(digits)
+
+    # Compute position-wise probabilities
+    pos_counts = [defaultdict(int) for _ in range(16)]
+    for box in boxes:
+        for i, d in enumerate(box[:16]):
+            pos_counts[i][d] += 1
+    pos_probs = [{d:c/sum(pos.values()) for d,c in pos.items()} if sum(pos.values())>0 else {} for pos in pos_counts]
+
+    # Deterministic box generation
+    def select_digit(p, r, c, col_count):
+        avail = {d:v for d,v in p.items() if d not in r and d not in c and col_count.get(d,0)<2}
+        if avail:
+            return max(avail, key=avail.get)
+        choices = [d for d in range(10) if d not in r and d not in c and col_count.get(d,0)<2]
+        return choices[0] if choices else 0
+
+    box = [[-1]*4 for _ in range(4)]
+    col_digits = [[] for _ in range(4)]
+    col_count = {}
+    for r in range(4):
+        for c in range(4):
+            d = select_digit(pos_probs[r*4+c], box[r], col_digits[c], col_count)
+            box[r][c] = d
+            col_digits[c].append(d)
+            col_count[d] = sum(1 for col in col_digits if d in col)
+
+    # Print predicted box
+    print("Predicted 4x4 Box:")
+    for row in box:
+        print(' '.join(str(x) for x in row))
+
+    # Save to Excel
+    box_str = '\n'.join(' '.join(str(x) for x in row) for row in box)
+    date_str = datetime.today().strftime("%d/%m/%Y (%a)")
+    wb = load_workbook(LOCAL) if os.path.exists(LOCAL) else Workbook()
+    ws = wb[OUT] if OUT in wb.sheetnames else wb.create_sheet(OUT)
+    ws.insert_rows(2)
+    ws['A2'] = date_str
+    ws['B2'] = box_str
+    ws['B2'].alignment = Alignment(wrapText=True, vertical="top")
+    ws['B2'].font = Font(name="Courier New")
+    ws.column_dimensions['B'].width = 28
+    wb.save(LOCAL)
+    print(f"✅ Predicted 4x4 box saved to '{LOCAL}' in '{OUT}'")
+
+
+# ------------------- Main -------------------
+if __name__=="__main__":
+    run_4d_box()
+    update_4d_box_stats()
+    generate_predicted_box_from_github()
