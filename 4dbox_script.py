@@ -3,6 +3,8 @@ from collections import Counter, defaultdict
 from typing import List
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font
+from openpyxl.utils import get_column_letter
+from math import ceil
 from datetime import datetime
 from io import BytesIO
 
@@ -213,10 +215,81 @@ def generate_predicted_box_from_github():
     ws['B2'] = box_str
     ws['B2'].alignment = Alignment(wrapText=True, vertical="top")
     ws['B2'].font = Font(name="Courier New")
-    ws.column_dimensions['B'].width = 28
-    wb.save(LOCAL)
-    print(f"✅ Predicted 4x4 box saved to '{LOCAL}' in '{OUT}'")
 
+    # after writing cells and setting alignment/font
+    autofit_columns(ws, max_width=60, padding=2, monospace=True)
+    autofit_rows(ws, default_row_height=15, approx_char_width=1.0, monospace=True)
+
+    wb.save(LOCAL)
+    print(f"✅ Predicted 4x4 box saved to '{LOCAL}' in '{OUT}' (auto-fitted columns)")
+
+def autofit_columns(ws, max_width=80, padding=2, monospace=True):
+    """
+    Approximate auto-fit for column widths.
+    - ws: openpyxl worksheet
+    - max_width: cap for column width
+    - padding: extra characters to add as buffer
+    - monospace: True if using a monospaced font (Courier New). If False, uses a small scale factor.
+    """
+    scale = 1.0 if monospace else 1.2  # proportional fonts need a scale factor
+    for col in ws.columns:
+        max_length = 0
+        col_letter = get_column_letter(col[0].column)
+        for cell in col:
+            if cell.value is None:
+                continue
+            text = str(cell.value)
+            # measure by longest single line (handles newlines)
+            for line in text.splitlines():
+                length = len(line)
+                if length > max_length:
+                    max_length = length
+        # compute width in Excel "char" units (approx)
+        new_width = min((max_length + padding) * scale, max_width)
+        # only set if we found something (avoid overwriting default small widths)
+        if max_length > 0:
+            ws.column_dimensions[col_letter].width = new_width
+
+def autofit_rows(ws, default_row_height=15, approx_char_width=1.0, monospace=True):
+    """
+    Approximate row height based on wrapped lines.
+    - ws: openpyxl worksheet
+    - default_row_height: height in points per line (approx 15 is typical)
+    - approx_char_width: number of "characters" that fit per Excel column width unit (approx 1 for monospace)
+    - monospace: affects how we compute wrap length (if False we use a scale factor)
+    """
+    scale = 1.0 if monospace else 1.2
+    # Pre-read current column widths (use openpyxl stored width or default)
+    col_widths = {}
+    for i in range(1, ws.max_column + 1):
+        letter = get_column_letter(i)
+        w = ws.column_dimensions[letter].width
+        if w is None:
+            # default excel column width approx 8.43 -> approximated here
+            w = 8.43
+        col_widths[i] = w
+
+    for row_idx in range(1, ws.max_row + 1):
+        max_lines = 1
+        for col_idx in range(1, ws.max_column + 1):
+            cell = ws.cell(row=row_idx, column=col_idx)
+            if cell.value is None:
+                continue
+            text = str(cell.value)
+            col_w = col_widths.get(col_idx, 8.43)
+            # how many characters can fit per visual line (approx)
+            chars_per_line = max(1, int(col_w / (approx_char_width * scale)))
+            # calculate required lines accounting for existing '\n' and wrapping
+            lines = 0
+            for raw_line in text.splitlines():
+                if len(raw_line) == 0:
+                    lines += 1
+                else:
+                    lines += ceil(len(raw_line) / chars_per_line)
+            if lines > max_lines:
+                max_lines = lines
+        # set row height (points) — adjust multiplier to taste
+        ws.row_dimensions[row_idx].height = max_lines * default_row_height
 
 # ------------------- Main -------------------
 if __name__=="__main__":
