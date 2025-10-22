@@ -43,6 +43,7 @@ jobs:
             echo "Running Python scripts..."
             python3 4djson_Append_to_Excel.py
             python3 4dbox_script.py
+            python3 4djson_Append_All_Prizes_to_Excel.py
           else
             echo "Running npm scrape..."
             npm run scrape
