@@ -41,7 +41,6 @@ jobs:
 
           if [[ "${{ github.event.schedule }}" == "1 12 * * 3,6,0" || "${{ github.event.inputs.task }}" == "python" ]]; then
             echo "Running Python scripts..."
-            python3 4djson_Append_to_Excel.py
             python3 4dbox_script.py
             python3 4d_results_predictor.py
           else
