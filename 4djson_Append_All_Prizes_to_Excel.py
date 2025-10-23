@@ -1,46 +1,42 @@
 import requests
-import pandas as pd
 from datetime import datetime
+from openpyxl import load_workbook
+from openpyxl.styles import PatternFill, Font
 import os
 
-# --- Fetch data ---
+# --- Fetch numbers ---
 url = "https://raw.githubusercontent.com/apiusage/sg-4d-json/main/4d.json"
-response = requests.get(url)
-numbers = response.json()
+nums = requests.get(url).json()
 
-# --- Assign prizes ---
-first, second, third = numbers[:3]
-starter = numbers[3:13]        # next 10
-consolation = numbers[13:23]   # next 10
+# --- Prepare row ---
+row = [
+    datetime.now().strftime("%a (%Y-%m-%d)"),
+    int(nums[0]), int(nums[1]), int(nums[2]),
+    " ".join(nums[3:13]),
+    " ".join(nums[13:23])
+]
 
-# --- Time info ---
-now = datetime.now()
-draw_date_str = now.strftime("%a (%Y-%m-%d)")  # e.g. Wed (2025-10-22)
+f = "4d_results_all.xlsx"
+headers = ["DrawDate","1st","2nd","3rd","Starter","Consolation"]
 
-# --- New row ---
-new_row = {
-    "DrawDate": draw_date_str,
-    "1st": first,
-    "2nd": second,
-    "3rd": third,
-    "Starter": " ".join(starter),
-    "Consolation": " ".join(consolation),
-}
+if not os.path.exists(f):
+    from openpyxl import Workbook
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Results"
+    ws.append(headers)
+    fill = PatternFill("solid", fgColor="FFFF00")
+    for c in ws[1]: c.fill, c.font = fill, Font(bold=True)
+    wb.save(f)
 
-# --- Save to CSV ---
-file_path = "4d_results_all.csv"
+wb = load_workbook(f)
+ws = wb["Results"]
 
-if os.path.exists(file_path):
-    df = pd.read_csv(file_path)
+# --- Avoid duplicate DrawDate ---
+dates = [cell.value for cell in ws["A"]]
+if row[0] in dates:
+    exit(print(f"⚠️ {row[0]} already exists."))
 
-    # ✅ Avoid duplicate entry for same DrawDate
-    if (df["DrawDate"] == draw_date_str).any():
-        print(f"⚠️ Results for {draw_date_str} already exist, skipping append.")
-    else:
-        df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-        df.to_csv(file_path, index=False)
-        print(f"✅ Appended new 4D results for {draw_date_str}.")
-else:
-    df = pd.DataFrame([new_row])
-    df.to_csv(file_path, index=False)
-    print(f"✅ Created new CSV and added first record for {draw_date_str}.")
+ws.append(row)
+wb.save(f)
+print(f"✅ Saved 4D results for {row[0]}.")
