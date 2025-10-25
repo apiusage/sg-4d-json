@@ -64,39 +64,47 @@ def calculate_stats(predicted_numbers):
         return "▶ iBet: 0/0 (0.00%)\n▶ Direct: 0/0 (0.00%)\n▶ Total Sets hit: 0"
 
     try:
-        df = pd.read_excel(CSV_FILE)
-    except:
-        return "Error fetching past results."
+        # Fetch latest draw results from JSON
+        url = "https://raw.githubusercontent.com/apiusage/sg-4d-json/main/4d.json"
+        latest = requests.get(url, timeout=10).json()
+        latest = [str(n).zfill(4) for n in latest]
+        if len(latest) < 3:
+            return "Error: incomplete latest results."
 
-    number_to_prize = {}
-    for _, row in df.iterrows():
-        for prize_col in ['1st','2nd','3rd']:
-            if prize_col in row and not pd.isna(row[prize_col]):
-                number_to_prize[str(row[prize_col]).zfill(4)] = prize_col
-        for col in ['Starter','Consolation']:
-            if col in row and not pd.isna(row[col]):
-                for n in str(row[col]).split():
-                    number_to_prize[n.zfill(4)] = col
+        # Extract all prize numbers
+        prize_map = {}
+        prize_map[latest[0]] = "1st"
+        prize_map[latest[1]] = "2nd"
+        prize_map[latest[2]] = "3rd"
+        for n in latest[3:13]:
+            prize_map[n] = "Starter"
+        for n in latest[13:23]:
+            prize_map[n] = "Consolation"
 
+    except Exception as e:
+        return f"Error fetching latest JSON: {e}"
+
+    # Compare predictions to latest results
     direct_hits, ibet_hits = [], []
-
     for num in predicted_numbers:
-        if num in number_to_prize:
-            direct_hits.append(f"{num} ({number_to_prize[num]})")
-        for past_num in number_to_prize:
-            if sorted(num) == sorted(past_num):
-                ibet_hits.append(f"{num} ({number_to_prize[past_num]})")
-                break
+        num = str(num).zfill(4)
+        if num in prize_map:
+            direct_hits.append(f"{num} ({prize_map[num]})")
+        else:
+            for win_num, prize in prize_map.items():
+                if sorted(num) == sorted(win_num):
+                    ibet_hits.append(f"{num} → {win_num} ({prize})")
+                    break
 
     n = len(predicted_numbers)
-    direct_count = len(direct_hits)
-    ibet_count = len(ibet_hits)
-    direct_pct = (direct_count / n * 100) if n else 0
-    ibet_pct = (ibet_count / n * 100) if n else 0
+    d, i = len(direct_hits), len(ibet_hits)
+    dp, ip = (d / n * 100), (i / n * 100)
 
-    return f"▶ iBet: {ibet_count}/{n} ({ibet_pct:.2f}%) - {', '.join(ibet_hits)}\n" \
-           f"▶ Direct: {direct_count}/{n} ({direct_pct:.2f}%) - {', '.join(direct_hits)}\n" \
-           f"▶ Total Sets hit: {direct_count}"
+    return (
+        f"▶ iBet: {i}/{n} ({ip:.2f}%) - {', '.join(ibet_hits)}\n"
+        f"▶ Direct: {d}/{n} ({dp:.2f}%) - {', '.join(direct_hits)}\n"
+        f"▶ Total Sets hit: {d}"
+    )
 
 # ---------------- ENSURE HEADERS ----------------
 def ensure_headers(ws):

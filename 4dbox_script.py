@@ -11,62 +11,25 @@ from math import ceil
 from datetime import datetime
 from io import BytesIO
 
-def append_4d_results(csv_file="4d_results.csv",
-                      json_url="https://raw.githubusercontent.com/apiusage/sg-4d-json/main/4d.json"):
-    """
-    Fetch the latest 4D numbers, determine unused digits,
-    and append the results to a CSV file if today's draw is not already recorded.
-
-    Args:
-        csv_file (str): Path to the CSV file to store results.
-        json_url (str): URL to fetch the latest 4D numbers.
-
-    Returns:
-        dict: The new row added (or would-be added) to the CSV.
-    """
+def append_4d_results(csv_file="4d_results.csv", url="https://raw.githubusercontent.com/apiusage/sg-4d-json/main/4d.json"):
     try:
-        response = requests.get(json_url, timeout=10)
-        response.raise_for_status()
-        numbers = response.json()
+        nums = requests.get(url, timeout=10).json()[:3]
+        if len(nums) < 3:
+            print("Not enough numbers."); return None
     except Exception as e:
-        print("Error fetching 4D numbers:", e)
-        return None
+        print("Fetch error:", e); return None
 
-    if len(numbers) < 3:
-        print("Not enough 4D numbers returned.")
-        return None
-
-    first, second, third = numbers[:3]
+    f, s, t = [str(n).zfill(4) for n in nums]
     now = datetime.now()
-    today = f"{now.day}/{now.month}/{now.year}"
+    today = f"{now.day}/{now.month}/{now.year}"   # ✅ works on all OS
+    not_used = "_".join(sorted(set("0123456789") - set(f+s+t))) + "_"
 
-    # Get digits used in all 3 numbers
-    used_digits = set(str(first) + str(second) + str(third))
-    all_digits = set("0123456789")
-    not_used_digits = sorted(all_digits - used_digits)
-    not_used_str = "_".join(not_used_digits) + "_" if not_used_digits else ""
-
-    new_row = {
-        "DrawDate": today,
-        "1st": first,
-        "2nd": second,
-        "3rd": third,
-        "Days": now.strftime('%a'),
-        "Not Used": not_used_str,
-        "Year": now.year
-    }
-
-    # Append to CSV
-    if os.path.exists(csv_file):
-        df = pd.read_csv(csv_file)
-        if not (df["DrawDate"] == today).any():
-            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-    else:
-        df = pd.DataFrame([new_row])
-
-    df.to_csv(csv_file, index=False)
-    print("Appended 4D results:", new_row)
-    return new_row
+    row = {"DrawDate": today, "1st": f, "2nd": s, "3rd": t, "Days": now.strftime("%a"), "Not Used": not_used, "Year": now.year}
+    df = pd.read_csv(csv_file) if os.path.exists(csv_file) else pd.DataFrame()
+    if "DrawDate" not in df or today not in df.get("DrawDate", []):
+        pd.concat([df, pd.DataFrame([row])], ignore_index=True).to_csv(csv_file, index=False)
+        print("Appended:", row)
+    return row
 
 # ------------------- Function 1: Generate & insert 4D box -------------------
 def run_4d_box(sheet_name="Perfect_4DBox", file_name="4d_box_output.xlsx"):
