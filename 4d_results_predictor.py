@@ -22,13 +22,18 @@ COLUMN_C_COLORS = ["CCFFFF", "CCFFCC", "FFCCCC", "FFFFCC"]  # pastel colors
 def fetch_and_save_results():
     url = "https://raw.githubusercontent.com/apiusage/sg-4d-json/main/4d.json"
     nums = requests.get(url).json()
+
+    # Format all numbers to 4 digits with leading zeros
+    nums = [str(n).zfill(4) for n in nums]
+
     row = [
         datetime.now().strftime("%a (%Y-%m-%d)"),
-        int(nums[0]), int(nums[1]), int(nums[2]),
+        nums[0], nums[1], nums[2],
         " ".join(nums[3:13]),
         " ".join(nums[13:23])
     ]
-    headers = ["DrawDate","1st","2nd","3rd","Starter","Consolation"]
+
+    headers = ["DrawDate", "1st", "2nd", "3rd", "Starter", "Consolation"]
 
     if not os.path.exists(CSV_FILE):
         wb = Workbook()
@@ -36,7 +41,9 @@ def fetch_and_save_results():
         ws.title = RESULTS_SHEET
         ws.append(headers)
         fill = PatternFill("solid", fgColor="FFFF00")
-        for c in ws[1]: c.fill, c.font = fill, Font(bold=True)
+        for c in ws[1]:
+            c.fill = fill
+            c.font = Font(bold=True)
         wb.save(CSV_FILE)
 
     wb = load_workbook(CSV_FILE)
@@ -46,6 +53,7 @@ def fetch_and_save_results():
     if row[0] in dates:
         print(f"⚠️ {row[0]} already exists in results.")
         return
+
     ws.append(row)
     wb.save(CSV_FILE)
     print(f"✅ Saved 4D results for {row[0]}.")
@@ -143,67 +151,126 @@ def calculate_stats_in_excel():
 def predict_and_append_excel():
     df = pd.read_excel(CSV_FILE)
     records = []
+
+    # --- Extract and normalize numbers from all rows ---
     for _, row in df.iterrows():
         try:
             date = pd.to_datetime(str(row['DrawDate']).split('(')[1].split(')')[0])
         except:
             date = pd.to_datetime(str(row['DrawDate']), errors='coerce')
-        if pd.isna(date): continue
-        for t in ['1st','2nd','3rd']:
-            if t in row and not pd.isna(row[t]): records.append((date,t,str(row[t]).zfill(4)))
-        for col in ['Starter','Consolation']:
+        if pd.isna(date):
+            continue
+
+        # 1st / 2nd / 3rd prizes
+        for t in ['1st', '2nd', '3rd']:
+            if t in row and not pd.isna(row[t]):
+                num = str(row[t]).strip().zfill(4)
+                if num.isdigit() and len(num) == 4:
+                    records.append((date, t, num))
+
+        # Starter / Consolation sets
+        for col in ['Starter', 'Consolation']:
             if col in row and not pd.isna(row[col]):
-                records.extend((date,col,n.zfill(4)) for n in str(row[col]).split() if n)
+                for n in str(row[col]).split():
+                    num = str(n).strip().zfill(4)
+                    if num.isdigit() and len(num) == 4:
+                        records.append((date, col, num))
+
+    # --- Sort records by date ---
     records.sort(key=lambda x: x[0])
-    if not records: return []
+    if not records:
+        print("⚠️ No valid records found in results file.")
+        return []
 
-    full_freq, pos_freq, recency, streaks = {}, [Counter() for _ in range(4)], defaultdict(float), defaultdict(int)
+    # --- Initialize statistics ---
+    full_freq = {}
+    pos_freq = [Counter() for _ in range(4)]
+    recency = defaultdict(float)
+    streaks = defaultdict(int)
+
     today = records[-1][0]
-    for idx, (date,t,num) in enumerate(records):
-        w = PRIZE_WEIGHTS.get(t,0.5)
-        full_freq[num] = full_freq.get(num,0)+w
-        for p,d in enumerate(num): pos_freq[p][d]+=w
-        recency[num]+= w*(0.5**((today-date).days/DECAY_HALF_LIFE_DAYS))
-        if idx>0 and records[idx-1][2]==num: streaks[num]+=1
 
-    norm = lambda d: {k:1.0 if max(d.values())==min(d.values()) else (v-min(d.values()))/(max(d.values())-min(d.values())) for k,v in d.items()}
-    norm_full, norm_rec = norm(full_freq), norm(recency)
+    # --- Compute frequency and recency metrics ---
+    for idx, (date, t, num) in enumerate(records):
+        num = str(num).strip().zfill(4)
+        if not num.isdigit() or len(num) != 4:
+            continue
+
+        w = PRIZE_WEIGHTS.get(t, 0.5)
+        full_freq[num] = full_freq.get(num, 0) + w
+
+        for p, d in enumerate(num[:4]):  # Safe loop for 4 positions
+            pos_freq[p][d] += w
+
+        recency[num] += w * (0.5 ** ((today - date).days / DECAY_HALF_LIFE_DAYS))
+
+        if idx > 0 and records[idx - 1][2] == num:
+            streaks[num] += 1
+
+    # --- Normalization ---
+    def norm(d):
+        if not d:
+            return {}
+        max_v, min_v = max(d.values()), min(d.values())
+        if max_v == min_v:
+            return {k: 1.0 for k in d}
+        return {k: (v - min_v) / (max_v - min_v) for k, v in d.items()}
+
+    norm_full = norm(full_freq)
+    norm_rec = norm(recency)
     max_streak = max(streaks.values()) if streaks else 1
 
+    # --- Scoring helpers ---
     def digit_pos_score(num):
-        s=1
-        for p,d in enumerate(num): s*= pos_freq[p].get(d,0)/sum(pos_freq[p].values())
+        s = 1
+        for p, d in enumerate(num):
+            total = sum(pos_freq[p].values())
+            if total == 0:
+                continue
+            s *= pos_freq[p].get(d, 0) / total
         return s
 
     def balance_score(num):
         digits = [int(d) for d in num]
-        odd=sum(d%2 for d in digits)
-        high=sum(1 for d in digits if d>=5)
-        low=4-high
-        return (1-abs(odd-(4-odd))/4+1-abs(high-low)/4)/2
+        odd = sum(d % 2 for d in digits)
+        high = sum(1 for d in digits if d >= 5)
+        low = 4 - high
+        return (1 - abs(odd - (4 - odd)) / 4 + 1 - abs(high - low) / 4) / 2
 
-    candidates=set(full_freq.keys())
-    combos=[[d] for d,_ in pos_freq[0].most_common(5)]
-    for p in range(1,4):
-        combos=[c+[d] for c in combos for d,_ in pos_freq[p].most_common(5)]
+    # --- Candidate generation ---
+    candidates = set(full_freq.keys())
+    combos = [[d] for d, _ in pos_freq[0].most_common(5)]
+    for p in range(1, 4):
+        combos = [c + [d] for c in combos for d, _ in pos_freq[p].most_common(5)]
     candidates.update(''.join(c) for c in combos)
 
-    scores={}
+    # --- Final scoring ---
+    scores = {}
     for num in candidates:
-        f_full=norm_full.get(num,0)
-        f_pos=math.log1p(digit_pos_score(num)) if digit_pos_score(num)>0 else 0
-        f_rec=norm_rec.get(num,0)
-        f_bal=balance_score(num)
-        f_streak=streaks.get(num,0)/(1+max_streak)
-        scores[num]= WEIGHTS["freq"]*f_full + WEIGHTS["pos"]*f_pos + WEIGHTS["recency"]*f_rec + WEIGHTS["balance"]*f_bal + WEIGHTS["streak"]*f_streak + WEIGHTS["rand"]*random.uniform(0,0.05)
+        num = str(num).zfill(4)
+        f_full = norm_full.get(num, 0)
+        f_pos = math.log1p(digit_pos_score(num)) if digit_pos_score(num) > 0 else 0
+        f_rec = norm_rec.get(num, 0)
+        f_bal = balance_score(num)
+        f_streak = streaks.get(num, 0) / (1 + max_streak)
+        scores[num] = (
+            WEIGHTS["freq"] * f_full +
+            WEIGHTS["pos"] * f_pos +
+            WEIGHTS["recency"] * f_rec +
+            WEIGHTS["balance"] * f_bal +
+            WEIGHTS["streak"] * f_streak +
+            WEIGHTS["rand"] * random.uniform(0, 0.05)
+        )
 
-    top_numbers = [num for num,_ in sorted(scores.items(), key=lambda x:x[1], reverse=True)[:TOP_N]]
+    top_numbers = [num for num, _ in sorted(scores.items(), key=lambda x: x[1], reverse=True)[:TOP_N]]
 
+    # --- Save predictions to Excel ---
     today_str = datetime.now().strftime("%a - %d/%m/%Y")
     wb = Workbook() if not os.path.exists(PRED_FILE) else load_workbook(PRED_FILE)
     ws = wb[PRED_SHEET] if PRED_SHEET in wb.sheetnames else wb.create_sheet(PRED_SHEET)
     ensure_headers(ws)
 
+    # Insert a new row for today’s prediction
     ws.insert_rows(2)
     ws["A2"], ws["B2"] = today_str, ' '.join(top_numbers)
     ws["C2"].value = ""  # Column C empty for next round
@@ -220,7 +287,8 @@ def predict_and_append_excel():
 
     # Adjust column widths
     for col in ws.columns:
-        ws.column_dimensions[get_column_letter(col[0].column)].width = max(len(str(c.value)) if c.value else 0 for c in col)+2
+        max_len = max(len(str(c.value)) if c.value else 0 for c in col)
+        ws.column_dimensions[get_column_letter(col[0].column)].width = max_len + 2
 
     wb.save(PRED_FILE)
     print(f"✅ Prediction appended for {today_str} (Column C empty)")
