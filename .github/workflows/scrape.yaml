@@ -45,7 +45,8 @@ jobs:
             python3 4d_results_predictor.py
           else
             echo "Running npm scrape..."
-            npm run scrape
+            # npm run scrape
+            python3 4d_results_predictor.py
           fi
 
       - name: Commit & Push
