@@ -230,6 +230,8 @@ def generate_predicted_box_from_github():
     target_days = [2, 5, 6]  # Wed=2, Sat=5, Sun=6
 
     # Always pick the next draw day strictly after today
+    # Find next Wednesday, Saturday, or Sunday after today, respecting Singapore time.
+    # if today is Friday, it will loop and return Saturday.
     next_draw_date = today + timedelta(days=1)
     while next_draw_date.weekday() not in target_days:
         next_draw_date += timedelta(days=1)
