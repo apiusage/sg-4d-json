@@ -10,6 +10,8 @@ from openpyxl.utils import get_column_letter
 from math import ceil
 from datetime import datetime
 from io import BytesIO
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo  # Python 3.9+
 
 def append_4d_results(csv_file="4d_results.csv", url="https://raw.githubusercontent.com/apiusage/sg-4d-json/main/4d.json"):
     try:
@@ -166,6 +168,7 @@ def generate_predicted_box_from_github():
     OUT = "Predicted_Box"
     URL = "https://github.com/apiusage/sg-4d-json/raw/main/4d_box_output.xlsx"
 
+    # --- Load Excel ---
     if os.path.exists(LOCAL):
         df = pd.read_excel(LOCAL, sheet_name=SHEET)
     else:
@@ -176,14 +179,15 @@ def generate_predicted_box_from_github():
             return
         df = pd.read_excel(BytesIO(resp.content), sheet_name=SHEET)
 
+    # --- Prepare boxes ---
     col = df.iloc[:, 1].dropna().tolist()
     boxes = []
-
     for b in col:
         digits = [int(d) for d in ''.join(filter(str.isdigit, str(b)))]
         if digits:
             boxes.append(digits)
 
+    # --- Position probabilities ---
     pos_counts = [defaultdict(int) for _ in range(16)]
     for box in boxes:
         for i, d in enumerate(box[:16]):
@@ -201,6 +205,7 @@ def generate_predicted_box_from_github():
         choices = [d for d in range(10) if d not in r and d not in c and col_count.get(d, 0) < 2]
         return choices[0] if choices else 0
 
+    # --- Generate 4x4 box ---
     box = [[-1] * 4 for _ in range(4)]
     col_digits = [[] for _ in range(4)]
     col_count = {}
@@ -217,14 +222,28 @@ def generate_predicted_box_from_github():
         print(' '.join(str(x) for x in row))
 
     box_str = '\n'.join(' '.join(str(x) for x in row) for row in box)
-    date_str = datetime.today().strftime("%d/%m/%Y (%a)")
 
+    # --- Singapore date & next Wed/Sat/Sun ---
+    sg_tz = ZoneInfo("Asia/Singapore")
+    today = datetime.now(sg_tz)
+
+    target_days = [2, 5, 6]  # Wed=2, Sat=5, Sun=6
+
+    # Always pick the next draw day strictly after today
+    next_draw_date = today + timedelta(days=1)
+    while next_draw_date.weekday() not in target_days:
+        next_draw_date += timedelta(days=1)
+
+    date_str = next_draw_date.strftime("%d/%m/%Y (%a)")
+    print("Next draw date:", date_str)
+
+    # --- Save to Excel ---
     wb = load_workbook(LOCAL) if os.path.exists(LOCAL) else Workbook()
     ws = wb[OUT] if OUT in wb.sheetnames else wb.create_sheet(OUT)
 
     ws.insert_rows(2)
-    ws['A2'] = date_str  # default font
-    ws['B2'] = box_str  # Courier New
+    ws['A2'] = date_str
+    ws['B2'] = box_str
     ws['B2'].alignment = Alignment(wrapText=True, vertical="top")
     ws['B2'].font = Font(name="Courier New")
 
