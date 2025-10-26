@@ -6,6 +6,8 @@ from openpyxl.styles import Alignment, PatternFill, Font
 from datetime import datetime
 import math
 import requests
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo  # Python 3.9+
 
 # ---------------- CONFIG ----------------
 CSV_FILE = "4d_results_all.xlsx"
@@ -26,8 +28,12 @@ def fetch_and_save_results():
     # Format all numbers to 4 digits with leading zeros
     nums = [str(n).zfill(4) for n in nums]
 
+    # ✅ Use Singapore timezone
+    sg_tz = ZoneInfo("Asia/Singapore")
+    now = datetime.now(sg_tz)
+
     row = [
-        datetime.now().strftime("%a (%Y-%m-%d)"),
+        now.strftime("%a (%Y-%m-%d)"),
         nums[0], nums[1], nums[2],
         " ".join(nums[3:13]),
         " ".join(nums[13:23])
@@ -56,7 +62,7 @@ def fetch_and_save_results():
 
     ws.append(row)
     wb.save(CSV_FILE)
-    print(f"✅ Saved 4D results for {row[0]}.")
+    print(f"✅ Saved 4D results for {row[0]} (Singapore time).")
 
 # ---------------- CALCULATE STATS ----------------
 def calculate_stats(predicted_numbers):
@@ -273,14 +279,28 @@ def predict_and_append_excel():
     top_numbers = [num for num, _ in sorted(scores.items(), key=lambda x: x[1], reverse=True)[:TOP_N]]
 
     # --- Save predictions to Excel ---
-    today_str = datetime.now().strftime("%a - %d/%m/%Y")
+    # --- Singapore date & next Wed/Sat/Sun ---
+    sg_tz = ZoneInfo("Asia/Singapore")
+    today = datetime.now(sg_tz)
+
+    target_days = [2, 5, 6]  # Wed=2, Sat=5, Sun=6
+
+    # Always pick the next draw day strictly after today
+    # Find next Wednesday, Saturday, or Sunday after today, respecting Singapore time.
+    # if today is Friday, it will loop and return Saturday.
+    next_draw_date = today + timedelta(days=1)
+    while next_draw_date.weekday() not in target_days:
+        next_draw_date += timedelta(days=1)
+
+    date_str = next_draw_date.strftime("%d/%m/%Y (%a)")
+
     wb = Workbook() if not os.path.exists(PRED_FILE) else load_workbook(PRED_FILE)
     ws = wb[PRED_SHEET] if PRED_SHEET in wb.sheetnames else wb.create_sheet(PRED_SHEET)
     ensure_headers(ws)
 
     # Insert a new row for today’s prediction
     ws.insert_rows(2)
-    ws["A2"], ws["B2"] = today_str, ' '.join(top_numbers)
+    ws["A2"], ws["B2"] = date_str, ' '.join(top_numbers)
     ws["C2"].value = ""  # Column C empty for next round
 
     # Determine color based on previous row
@@ -299,7 +319,7 @@ def predict_and_append_excel():
         ws.column_dimensions[get_column_letter(col[0].column)].width = max_len + 2
 
     wb.save(PRED_FILE)
-    print(f"✅ Prediction appended for {today_str} (Column C empty)")
+    print(f"✅ Prediction appended for {date_str} (Column C empty)")
     return top_numbers
 
 # ---------------- MAIN ----------------
