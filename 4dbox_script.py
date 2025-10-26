@@ -3,296 +3,188 @@ import itertools
 import requests
 import pandas as pd
 from collections import Counter, defaultdict
-from typing import List
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font
 from openpyxl.utils import get_column_letter
-from math import ceil
 from io import BytesIO
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo  # Python 3.9+
+from zoneinfo import ZoneInfo
 
-def append_4d_results(csv_file="4d_results.csv", url="https://raw.githubusercontent.com/apiusage/sg-4d-json/main/4d.json"):
+URL = "https://raw.githubusercontent.com/apiusage/sg-4d-json/main/4d.json"
+FILE = "4d_box_output.xlsx"
+
+def fetch_numbers():
     try:
-        nums = requests.get(url, timeout=10).json()[:3]
-        if len(nums) < 3:
-            print("Not enough numbers."); return None
-    except Exception as e:
-        print("Fetch error:", e); return None
+        return [str(n).zfill(4) for n in requests.get(URL, timeout=10).json()]
+    except:
+        return []
 
-    f, s, t = [str(n).zfill(4) for n in nums]
+def append_4d_results(csv="4d_results.csv"):
+    nums = fetch_numbers()[:3]
+    if len(nums) < 3:
+        return None
+
     now = datetime.now()
-    today = f"{now.day}/{now.month}/{now.year}"   # ✅ works on all OS
-    not_used = "_".join(sorted(set("0123456789") - set(f+s+t))) + "_"
+    not_used = "_".join(sorted(set("0123456789") - set("".join(nums)))) + "_"
+    row = {"DrawDate": now.strftime("%d/%m/%Y"), "1st": nums[0], "2nd": nums[1],
+           "3rd": nums[2], "Days": now.strftime("%a"), "Not Used": not_used, "Year": now.year}
 
-    row = {"DrawDate": today, "1st": f, "2nd": s, "3rd": t, "Days": now.strftime("%a"), "Not Used": not_used, "Year": now.year}
-    df = pd.read_csv(csv_file) if os.path.exists(csv_file) else pd.DataFrame()
-    if "DrawDate" not in df or today not in df.get("DrawDate", []):
-        pd.concat([df, pd.DataFrame([row])], ignore_index=True).to_csv(csv_file, index=False)
+    df = pd.read_csv(csv) if os.path.exists(csv) else pd.DataFrame()
+    if row["DrawDate"] not in df.get("DrawDate", []).values:
+        pd.concat([df, pd.DataFrame([row])], ignore_index=True).to_csv(csv, index=False)
         print("Appended:", row)
     return row
 
-# ------------------- Function 1: Generate & insert 4D box -------------------
-def run_4d_box(sheet_name="Perfect_4DBox", file_name="4d_box_output.xlsx"):
-    """
-    Fetch latest 4D numbers, generate a 4x4 box, calculate stats, and save to Excel.
-    """
+def generate_box(numbers):
+    numbers = [str(n).zfill(4) for n in numbers]
+    counters = [Counter(num[i] for num in numbers) for i in range(4)]
+    tops = [[d for d, _ in c.most_common(4)] for c in counters]
+    box = [[tops[c][r] for c in range(4)] for r in range(4)]
+    flat = [d for row in box for d in row]
 
-    def generate_perms(box_digits: List[str]) -> List[str]:
-        perms = list(itertools.permutations(range(4)))  # all 24 permutations
-        res = []
-        for i, j, k, l in itertools.product(range(0, 16, 4), range(1, 16, 4),
-                                             range(2, 16, 4), range(3, 16, 4)):
-            if max(i, j, k, l) < 16:
-                g = [box_digits[i], box_digits[j], box_digits[k], box_digits[l]]
-                res += [''.join(g[idx] for idx in p) for p in perms]
-        return res
+    missing = sorted(set('0123456789') - set(flat))
+    for m in missing:
+        for i in range(15, -1, -1):
+            r, c = divmod(i, 4)
+            if flat.count(box[r][c]) > 1:
+                box[r][c] = m
+                flat[i] = m
+                break
+    return box
 
-    def generate_box(numbers: List[str]) -> List[List[str]]:
-        numbers = [str(n).zfill(4) for n in numbers]
-        counters = [Counter() for _ in range(4)]
-        for num in numbers:
-            for i, d in enumerate(num):
-                counters[i][d] += 1
+def gen_perms(flat):
+    res = []
+    for i, j, k, l in itertools.product(range(0, 16, 4), range(1, 16, 4),
+                                        range(2, 16, 4), range(3, 16, 4)):
+        g = [flat[i], flat[j], flat[k], flat[l]]
+        res.extend(''.join(p) for p in itertools.permutations(g))
+    return res
 
-        tops = [[d for d, _ in c.most_common(4)] for c in counters]
-        box = [[tops[col][row] for col in range(4)] for row in range(4)]
-        flat = [d for row in box for d in row]
+def autofit(ws):
+    for col in ws.columns:
+        max_len = max((max((len(str(line)) for line in str(c.value or "").splitlines()), default=0) for c in col),
+                      default=0)
+        col_letter = get_column_letter(col[0].column)
+        ws.column_dimensions[col_letter].width = min(max_len * 1.3 + 4, 120) if col_letter != 'A' else min(max_len + 2,
+                                                                                                           20)
 
-        # Fill missing digits
-        missing = sorted(set('0123456789') - set(flat))
-        idx = 15
-        for m in missing:
-            while idx >= 0:
-                r, c = divmod(idx, 4)
-                if flat.count(box[r][c]) > 1:
-                    box[r][c] = m
-                    flat[idx] = m
-                    break
-                idx -= 1
-        return box
+    for r in range(1, ws.max_row + 1):
+        max_lines = max((len(str(ws.cell(r, c).value or "").splitlines()) for c in range(1, ws.max_column + 1)),
+                        default=1)
+        ws.row_dimensions[r].height = max_lines * 15
 
-    # Fetch latest 4D numbers
-    try:
-        numbers = requests.get(
-            "https://raw.githubusercontent.com/apiusage/sg-4d-json/refs/heads/main/4d.json",
-            timeout=10
-        ).json()
-    except:
-        numbers = []
-
+def run_4d_box(sheet="Perfect_4DBox"):
+    numbers = fetch_numbers()
     box = generate_box(numbers)
-    print("Generated 4x4 Box:")
-    print('\n'.join(' '.join(row) for row in box))
+    print("Generated 4x4 Box:\n" + '\n'.join(' '.join(row) for row in box))
 
-    flat_box = [d for row in box for d in row]
-    perms = generate_perms(flat_box)
+    flat = [d for row in box for d in row]
+    perms = gen_perms(flat)
     dedup = len(set(''.join(sorted(p)) for p in perms))
     unique = len(set(perms))
     matched = [n for n in numbers if n in perms]
 
-    date_str = datetime.today().strftime("%d/%m/%Y (%a)")
-    wb = load_workbook(file_name) if os.path.exists(file_name) else Workbook()
-    ws = wb[sheet_name] if sheet_name in wb.sheetnames else wb.create_sheet(sheet_name)
+    wb = load_workbook(FILE) if os.path.exists(FILE) else Workbook()
+    ws = wb[sheet] if sheet in wb.sheetnames else wb.create_sheet(sheet)
 
     ws.insert_rows(2)
-    ws.cell(2, 1, date_str)  # column A: date (default font)
-    ws.cell(2, 2, '\n'.join(' '.join(row) for row in box))  # column B: box (Courier New)
-    ws.cell(2, 3, f"✅ Direct: {len(matched)}/{unique} ({len(matched)/unique*100:.2f}%)\n"
-                   f"✅ iBet: {len(matched)}/{dedup} ({len(matched)/dedup*100:.2f}%)")  # column C: default font
+    ws['A2'] = datetime.today().strftime("%d/%m/%Y (%a)")
+    ws['B2'] = '\n'.join(' '.join(row) for row in box)
+    ws[
+        'C2'] = f"✅ Direct: {len(matched)}/{unique} ({len(matched) / unique * 100:.2f}%)\n✅ iBet: {len(matched)}/{dedup} ({len(matched) / dedup * 100:.2f}%)"
+    ws['B2'].alignment = ws['C2'].alignment = Alignment(wrapText=True)
+    ws['B2'].font = Font(name="Courier New")
 
-    ws.cell(2, 2).alignment = ws.cell(2, 3).alignment = Alignment(wrapText=True)
-    ws.cell(2, 2).font = Font(name="Courier New")  # only column B
+    autofit(ws)
+    wb.save(FILE)
+    print(f"✅ 4D box saved to '{sheet}'")
 
-    autofit_columns(ws)
-    autofit_rows(ws)
-    wb.save(file_name)
-    print(f"✅ 4D box inserted at row 2 of '{sheet_name}' in '{file_name}'")
-
-
-# ------------------- Function 2: Update stats for predicted boxes -------------------
-def update_4d_box_stats(file_name="4d_box_output.xlsx", sheet_name="Predicted_Box"):
-    try:
-        past = [str(n).zfill(4) for n in requests.get(
-            "https://raw.githubusercontent.com/apiusage/sg-4d-json/refs/heads/main/4d.json",
-            timeout=10
-        ).json()]
-    except:
-        past = []
-
-    if not os.path.exists(file_name):
+def update_4d_box_stats(sheet="Predicted_Box"):
+    past = fetch_numbers()
+    if not os.path.exists(FILE):
         return
 
-    wb = load_workbook(file_name)
-    if sheet_name not in wb.sheetnames:
+    wb = load_workbook(FILE)
+    if sheet not in wb.sheetnames:
         return
 
-    ws = wb[sheet_name]
-
+    ws = wb[sheet]
     for r in range(2, ws.max_row + 1):
-        b = ws[f"B{r}"].value
-        s = ws[f"C{r}"]
+        b, s = ws[f"B{r}"].value, ws[f"C{r}"]
         if not b or s.value:
             continue
 
         flat = [d for d in b if d.isdigit()]
-        perms = []
-
-        for i, j, k, l in itertools.product(range(0, 16, 4), range(1, 16, 4),
-                                             range(2, 16, 4), range(3, 16, 4)):
-            if max(i, j, k, l) < 16:
-                g = [flat[i], flat[j], flat[k], flat[l]]
-                perms += [''.join(p) for p in itertools.permutations(g)]
-
+        perms = gen_perms(flat)
         dedup = len(set(''.join(sorted(p)) for p in perms))
         unique = len(set(perms))
         direct = sum(1 for n in past if n in perms)
         ibet = len({n for n in past if ''.join(sorted(n)) in {''.join(sorted(p)) for p in perms}})
 
-        s.value = (f"▶ iBet: {ibet}/{dedup} ({ibet/dedup*100:.2f}%)\n"
-                   f"▶ Direct: {direct}/{unique} ({direct/unique*100:.2f}%)\n"
-                   f"▶ Total Sets hit: {direct}")
+        s.value = f"▶ iBet: {ibet}/{dedup} ({ibet / dedup * 100:.2f}%)\n▶ Direct: {direct}/{unique} ({direct / unique * 100:.2f}%)\n▶ Total Sets hit: {direct}"
         s.alignment = Alignment(wrapText=True)
 
-    autofit_columns(ws)
-    autofit_rows(ws)
-    wb.save(file_name)
-    print(f"✅ Stats updated in column C of '{file_name}'")
+    autofit(ws)
+    wb.save(FILE)
+    print(f"✅ Stats updated in '{sheet}'")
 
+def generate_predicted_box(sheet_in="Perfect_4DBox", sheet_out="Predicted_Box"):
+    try:
+        df = pd.read_excel(FILE, sheet_name=sheet_in) if os.path.exists(FILE) else \
+            pd.read_excel(
+                BytesIO(requests.get(f"https://github.com/apiusage/sg-4d-json/raw/main/{FILE}", timeout=10).content),
+                sheet_name=sheet_in)
+    except:
+        return
 
-# ------------------- Function 3: Generate predicted box -------------------
-def generate_predicted_box_from_github():
-    LOCAL = "4d_box_output.xlsx"
-    SHEET = "Perfect_4DBox"
-    OUT = "Predicted_Box"
-    URL = "https://github.com/apiusage/sg-4d-json/raw/main/4d_box_output.xlsx"
+    boxes = [[int(d) for d in ''.join(filter(str.isdigit, str(b)))]
+             for b in df.iloc[:, 1].dropna() if any(c.isdigit() for c in str(b))]
 
-    # --- Load Excel ---
-    if os.path.exists(LOCAL):
-        df = pd.read_excel(LOCAL, sheet_name=SHEET)
-    else:
-        resp = requests.get(URL, timeout=10)
-        resp.raise_for_status()
-        xls = pd.ExcelFile(BytesIO(resp.content))
-        if SHEET not in xls.sheet_names:
-            return
-        df = pd.read_excel(BytesIO(resp.content), sheet_name=SHEET)
-
-    # --- Prepare boxes ---
-    col = df.iloc[:, 1].dropna().tolist()
-    boxes = []
-    for b in col:
-        digits = [int(d) for d in ''.join(filter(str.isdigit, str(b)))]
-        if digits:
-            boxes.append(digits)
-
-    # --- Position probabilities ---
     pos_counts = [defaultdict(int) for _ in range(16)]
     for box in boxes:
         for i, d in enumerate(box[:16]):
             pos_counts[i][d] += 1
 
-    pos_probs = [
-        {d: c / sum(pos.values()) for d, c in pos.items()} if sum(pos.values()) > 0 else {}
-        for pos in pos_counts
-    ]
+    pos_probs = [{d: c / sum(pos.values()) for d, c in pos.items()} if sum(pos.values()) > 0 else {}
+                 for pos in pos_counts]
 
-    def select_digit(p, r, c, col_count):
-        avail = {d: v for d, v in p.items() if d not in r and d not in c and col_count.get(d, 0) < 2}
+    def pick(p, r, c, col_cnt):
+        avail = {d: v for d, v in p.items() if d not in r and d not in c and col_cnt.get(d, 0) < 2}
         if avail:
             return max(avail, key=avail.get)
-        choices = [d for d in range(10) if d not in r and d not in c and col_count.get(d, 0) < 2]
-        return choices[0] if choices else 0
+        return next((d for d in range(10) if d not in r and d not in c and col_cnt.get(d, 0) < 2), 0)
 
-    # --- Generate 4x4 box ---
-    box = [[-1] * 4 for _ in range(4)]
-    col_digits = [[] for _ in range(4)]
-    col_count = {}
-
+    box, col_digits, col_cnt = [[-1] * 4 for _ in range(4)], [[] for _ in range(4)], {}
     for r in range(4):
         for c in range(4):
-            d = select_digit(pos_probs[r * 4 + c], box[r], col_digits[c], col_count)
+            d = pick(pos_probs[r * 4 + c], box[r], col_digits[c], col_cnt)
             box[r][c] = d
             col_digits[c].append(d)
-            col_count[d] = sum(1 for col in col_digits if d in col)
+            col_cnt[d] = sum(1 for col in col_digits if d in col)
 
-    print("Predicted 4x4 Box:")
-    for row in box:
-        print(' '.join(str(x) for x in row))
+    print("Predicted Box:\n" + '\n'.join(' '.join(str(x) for x in row) for row in box))
 
-    box_str = '\n'.join(' '.join(str(x) for x in row) for row in box)
-
-    # --- Singapore date & next Wed/Sat/Sun ---
     sg_tz = ZoneInfo("Asia/Singapore")
-    today = datetime.now(sg_tz)
+    next_draw = datetime.now(sg_tz) + timedelta(days=1)
+    while next_draw.weekday() not in [2, 5, 6]:
+        next_draw += timedelta(days=1)
 
-    target_days = [2, 5, 6]  # Wed=2, Sat=5, Sun=6
-
-    # Always pick the next draw day strictly after today
-    # Find next Wednesday, Saturday, or Sunday after today, respecting Singapore time.
-    # if today is Friday, it will loop and return Saturday.
-    next_draw_date = today + timedelta(days=1)
-    while next_draw_date.weekday() not in target_days:
-        next_draw_date += timedelta(days=1)
-
-    date_str = next_draw_date.strftime("%d/%m/%Y (%a)")
-    print("Next draw date:", date_str)
-
-    # --- Save to Excel ---
-    wb = load_workbook(LOCAL) if os.path.exists(LOCAL) else Workbook()
-    ws = wb[OUT] if OUT in wb.sheetnames else wb.create_sheet(OUT)
+    wb = load_workbook(FILE) if os.path.exists(FILE) else Workbook()
+    ws = wb[sheet_out] if sheet_out in wb.sheetnames else wb.create_sheet(sheet_out)
 
     ws.insert_rows(2)
-    ws['A2'] = date_str
-    ws['B2'] = box_str
+    ws['A2'] = next_draw.strftime("%d/%m/%Y (%a)")
+    ws['B2'] = '\n'.join(' '.join(str(x) for x in row) for row in box)
     ws['B2'].alignment = Alignment(wrapText=True, vertical="top")
     ws['B2'].font = Font(name="Courier New")
 
-    autofit_columns(ws)
-    autofit_rows(ws)
-    wb.save(LOCAL)
-    print(f"✅ Predicted 4x4 box saved to '{LOCAL}' in '{OUT}' (columns auto-fitted)")
+    autofit(ws)
+    wb.save(FILE)
+    print(f"✅ Predicted box saved to '{sheet_out}'")
 
 
-# ------------------- Autofit helpers -------------------
-def autofit_columns(ws, max_width=120, padding=4, scale=1.3):
-    """Auto-fit columns for wrapped text, default font."""
-    for col in ws.columns:
-        col_letter = get_column_letter(col[0].column)
-        max_len = 0
-        for cell in col:
-            if cell.value is None:
-                continue
-            for line in str(cell.value).splitlines():
-                max_len = max(max_len, len(line))
-        # Column A (date) reasonable width
-        if col_letter == 'A':
-            ws.column_dimensions[col_letter].width = min(max(max_len + 2, 12), 20)
-        else:
-            ws.column_dimensions[col_letter].width = min((max_len + padding) * scale, max_width)
-
-
-def autofit_rows(ws, default_row_height=15, approx_char_width=1.0, scale=1.0):
-    """Auto-fit rows based on wrapped lines, default font."""
-    col_widths = {i: ws.column_dimensions[get_column_letter(i)].width or 8.43
-                  for i in range(1, ws.max_column + 1)}
-
-    for r in range(1, ws.max_row + 1):
-        max_lines = 1
-        for c in range(1, ws.max_column + 1):
-            cell = ws.cell(row=r, column=c)
-            if cell.value is None:
-                continue
-            col_w = col_widths[c]
-            chars_per_line = max(1, int(col_w / approx_char_width))
-            wrapped_lines = sum(ceil(len(l) / chars_per_line) for l in str(cell.value).splitlines())
-            max_lines = max(max_lines, wrapped_lines)
-        ws.row_dimensions[r].height = max_lines * default_row_height
-
-
-# ------------------- Main -------------------
 if __name__ == "__main__":
     append_4d_results()
     run_4d_box()
     update_4d_box_stats()
-    generate_predicted_box_from_github()
+    generate_predicted_box()
