@@ -26,30 +26,55 @@ def next_draw():
     return d.strftime("%d/%m/%Y (%a)")
 
 def fetch_and_save_results():
-    nums = fetch_nums()
-    now = datetime.now(ZoneInfo("Asia/Singapore"))
-    row = [now.strftime("%a (%Y-%m-%d)"), nums[0], nums[1], nums[2], " ".join(nums[3:13]), " ".join(nums[13:23])]
+    try:
+        nums = fetch_nums()
+        if not nums or len(nums) < 23:
+            print("❌ Failed to fetch numbers or insufficient data")
+            return
 
-    if not os.path.exists(CSV_FILE):
-        wb = Workbook()
-        ws = wb.active
-        ws.title = RESULTS_SHEET
-        ws.append(["DrawDate", "1st", "2nd", "3rd", "Starter", "Consolation"])
-        for c in ws[1]:
-            c.fill = PatternFill("solid", fgColor="FFFF00")
-            c.font = Font(bold=True)
+        now = datetime.now(ZoneInfo("Asia/Singapore"))
+        row = [
+            now.strftime("%a (%Y-%m-%d)"),
+            nums[0],
+            nums[1],
+            nums[2],
+            " ".join(str(n) for n in nums[3:13]),  # Starter prizes
+            " ".join(str(n) for n in nums[13:23])  # Consolation prizes
+        ]
+
+        # Create file if it doesn't exist
+        if not os.path.exists(CSV_FILE):
+            wb = Workbook()
+            ws = wb.active
+            ws.title = RESULTS_SHEET
+            ws.append(["DrawDate", "1st", "2nd", "3rd", "Starter", "Consolation"])
+            for c in ws[1]:
+                c.fill = PatternFill("solid", fgColor="FFFF00")
+                c.font = Font(bold=True)
+            wb.save(CSV_FILE)
+            print(f"📄 Created new file: {CSV_FILE}")
+
+        # Load and check for duplicates
+        wb = load_workbook(CSV_FILE)
+        ws = wb[RESULTS_SHEET]
+
+        # Check existing dates (skip header row)
+        existing_dates = [cell.value for cell in ws["A"][1:]]
+        if row[0] in existing_dates:
+            print(f"⚠️ {row[0]} already exists")
+            wb.close()
+            return
+
+        # Append and save
+        ws.append(row)
         wb.save(CSV_FILE)
+        wb.close()
+        print(f"✅ Saved results for {row[0]}: {row[1]}, {row[2]}, {row[3]}")
 
-    wb = load_workbook(CSV_FILE)
-    ws = wb[RESULTS_SHEET]
-
-    if row[0] in [c.value for c in ws["A"]]:
-        print(f"⚠️ {row[0]} already exists")
-        return
-
-    ws.append(row)
-    wb.save(CSV_FILE)
-    print(f"✅ Saved results for {row[0]}")
+    except Exception as e:
+        print(f"❌ Error in fetch_and_save_results: {e}")
+        import traceback
+        traceback.print_exc()
 
 def calculate_stats(predicted):
     if not predicted:
