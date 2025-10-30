@@ -55,6 +55,6 @@ jobs:
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
           git pull --rebase origin main || true
-          git add -f 4d_results.csv 4d_box_output.xlsx 4d.json || true
+          git add -f 4d_results.csv 4d_results_all.xlsx 4d_box_output.xlsx 4d.json || true
           git commit -m "Auto update" || echo "No changes"
           git push https://x-access-token:$PAT@github.com/${{ github.repository }} HEAD:main
