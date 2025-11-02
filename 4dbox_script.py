@@ -38,18 +38,38 @@ def append_4d_results(csv="4d_results.csv"):
 def generate_box(numbers):
     numbers = [str(n).zfill(4) for n in numbers]
     counters = [Counter(num[i] for num in numbers) for i in range(4)]
-    tops = [[d for d, _ in c.most_common(4)] for c in counters]
+    tops = [[d for d, _ in c.most_common(10)] for c in counters]
     box = [[tops[c][r] for c in range(4)] for r in range(4)]
-    flat = [d for row in box for d in row]
 
-    missing = sorted(set('0123456789') - set(flat))
-    for m in missing:
+    # Fix column duplicates and track digit columns
+    digit_cols = defaultdict(set)
+    for c in range(4):
+        seen = set()
+        for r in range(4):
+            if box[r][c] in seen:
+                box[r][c] = next(d for d in tops[c] if d not in seen)
+            seen.add(box[r][c])
+            digit_cols[box[r][c]].add(c)
+
+    # Fix digits in >2 columns
+    for digit, cols in list(digit_cols.items()):
+        while len(cols) > 2:
+            _, r, c = min((counters[c][digit], r, c)
+                          for c in cols for r in range(4) if box[r][c] == digit)
+            col_used = {box[i][c] for i in range(4)}
+            box[r][c] = next(d for d in tops[c] if d not in col_used and len(digit_cols[d]) < 2)
+            digit_cols[digit].remove(c)
+            digit_cols[box[r][c]].add(c)
+
+    # Fill missing digits
+    flat = [d for row in box for d in row]
+    for m in sorted(set('0123456789') - set(flat)):
         for i in range(15, -1, -1):
             r, c = divmod(i, 4)
             if flat.count(box[r][c]) > 1:
-                box[r][c] = m
-                flat[i] = m
+                box[r][c] = flat[i] = m
                 break
+
     return box
 
 def gen_perms(flat):
@@ -181,7 +201,6 @@ def generate_predicted_box(sheet_in="Perfect_4DBox", sheet_out="Predicted_Box"):
     autofit(ws)
     wb.save(FILE)
     print(f"✅ Predicted box saved to '{sheet_out}'")
-
 
 if __name__ == "__main__":
     append_4d_results()
