@@ -19,6 +19,57 @@ def fetch_numbers():
     except:
         return []
 
+# ---------------------------
+# Helper: ensure digits 0-9 present
+# ---------------------------
+def enforce_all_digits(box):
+    """
+    Ensure digits 0-9 appear at least once in a 4x4 box.
+    Accepts box elements as either strings ('0'..'9') or integers (0..9).
+    Returns same structure (4x4) with element types preserved.
+    """
+    # determine type of elements
+    if not box or not box[0]:
+        return box
+
+    # flatten and maintain original element type (str or int)
+    is_int = isinstance(box[0][0], int)
+    flat = [str(d) for row in box for d in row]  # use strings for processing
+    missing = sorted(set("0123456789") - set(flat))
+    if not missing:
+        # nothing missing, return original box
+        return box
+
+    # Replace duplicates with missing digits (replace first duplicate occurrences)
+    # Prefer replacing elements that appear more than once
+    for m in missing:
+        replaced = False
+        # Try to replace a duplicate digit
+        for idx, d in enumerate(flat):
+            if flat.count(d) > 1:
+                flat[idx] = m
+                replaced = True
+                break
+        # If no duplicates found (rare), replace any position that doesn't break column constraints
+        if not replaced:
+            for idx, d in enumerate(flat):
+                if d not in missing:
+                    flat[idx] = m
+                    break
+
+    # reshape back to 4x4
+    fixed = []
+    for i in range(0, 16, 4):
+        row = flat[i:i+4]
+        if is_int:
+            row = [int(x) for x in row]
+        fixed.append(row)
+    return fixed
+
+# ---------------------------
+# Your original functions (with minimal edits)
+# ---------------------------
+
 def append_4d_results(csv="4d_results.csv"):
     nums = fetch_numbers()[:3]
     if len(nums) < 3:
@@ -96,6 +147,10 @@ def autofit(ws):
 def run_4d_box(sheet="Perfect_4DBox"):
     numbers = fetch_numbers()
     box = generate_box(numbers)
+
+    # Enforce presence of all digits 0-9 (preserve string type used elsewhere)
+    box = enforce_all_digits(box)
+
     print("Generated 4x4 Box:\n" + '\n'.join(' '.join(row) for row in box))
 
     flat = [d for row in box for d in row]
@@ -110,8 +165,7 @@ def run_4d_box(sheet="Perfect_4DBox"):
     ws.insert_rows(2)
     ws['A2'] = datetime.today().strftime("%d/%m/%Y (%a)")
     ws['B2'] = '\n'.join(' '.join(row) for row in box)
-    ws[
-        'C2'] = f"✅ Direct: {len(matched)}/{unique} ({len(matched) / unique * 100:.2f}%)\n✅ iBet: {len(matched)}/{dedup} ({len(matched) / dedup * 100:.2f}%)"
+    ws['C2'] = f"✅ Direct: {len(matched)}/{unique} ({len(matched) / unique * 100:.2f}%)\n✅ iBet: {len(matched)}/{dedup} ({len(matched) / dedup * 100:.2f}%)"
     ws['B2'].alignment = ws['C2'].alignment = Alignment(wrapText=True)
     ws['B2'].font = Font(name="Courier New")
 
@@ -181,6 +235,9 @@ def generate_predicted_box(sheet_in="Perfect_4DBox", sheet_out="Predicted_Box"):
             box[r][c] = d
             col_digits[c].append(d)
             col_cnt[d] = sum(1 for col in col_digits if d in col)
+
+    # enforce all digits appear at least once (generate_predicted_box uses integers)
+    box = enforce_all_digits(box)
 
     print("Predicted Box:\n" + '\n'.join(' '.join(str(x) for x in row) for row in box))
 
