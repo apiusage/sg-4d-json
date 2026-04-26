@@ -2,7 +2,7 @@
 cd /d "C:\Users\bston\Dropbox\- SG Pools\sg-4d-json-main"
 
 :: Revert to previous commit
-git reset --hard HEAD~1
+git reset --hard HEAD~3
 
 :: Add and commit again
 git add .
