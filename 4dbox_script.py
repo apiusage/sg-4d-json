@@ -19,7 +19,7 @@ def fetch_numbers():
     except:
         return []
 
-# ---------------------------
+# ----------------------------
 # Helper: ensure digits 0-9 present
 # ---------------------------
 def enforce_all_digits(box):
