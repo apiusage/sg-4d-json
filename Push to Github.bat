@@ -11,13 +11,18 @@ echo *.xls
 echo *.xlsx
 echo *.xlsm
 echo *.csv
+echo *.log
+echo __pycache__/
+echo *.pyc
+echo .env
+echo .DS_Store
 ) > .gitignore
 
 echo ==========================
-echo Removing already tracked ignored files
+echo Applying gitignore (reset cache)
 echo ==========================
 
-git rm -r --cached . 2>nul
+git rm -r --cached .
 
 echo ==========================
 echo Re-adding clean files only
@@ -29,7 +34,7 @@ echo ==========================
 echo Committing changes
 echo ==========================
 
-git commit -m "Clean repo + fix .gitignore"
+git commit -m "Clean repo + improved .gitignore"
 
 echo ==========================
 echo Pushing
