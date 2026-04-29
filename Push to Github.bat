@@ -31,7 +31,7 @@ echo ==========================
 git commit -m "Auto update (safe push)" 2>nul
 
 echo ==========================
-echo 4. ALWAYS sync with GitHub first
+echo 4. ALWAYS sync with GitHub first. Get the latest changes from GitHub and put my changes on top of them.
 echo ==========================
 
 git pull origin main --rebase
