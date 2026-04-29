@@ -1,3 +1,8 @@
+4d.json
+*.xls
+*.xlsx
+*.xlsm
+*.csv
 *.log
 __pycache__/
 *.pyc

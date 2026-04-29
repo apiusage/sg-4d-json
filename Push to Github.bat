@@ -2,7 +2,7 @@
 cd /d C:\Users\bston\Dropbox\- SG Pools\sg-4d-json-main
 
 echo ==========================
-echo Writing .gitignore
+echo 1. Update .gitignore (safe only)
 echo ==========================
 
 (
@@ -19,27 +19,31 @@ echo .DS_Store
 ) > .gitignore
 
 echo ==========================
-echo Applying gitignore (reset cache)
-echo ==========================
-
-git rm -r --cached .
-
-echo ==========================
-echo Re-adding clean files only
+echo 2. Stage ONLY allowed changes
 echo ==========================
 
 git add .
 
 echo ==========================
-echo Committing changes
+echo 3. Commit changes (if any)
 echo ==========================
 
-git commit -m "Clean repo + improved .gitignore"
+git commit -m "Auto update (safe push)" 2>nul
 
 echo ==========================
-echo Pushing
+echo 4. ALWAYS sync with GitHub first
+echo ==========================
+
+git pull origin main --rebase
+
+echo ==========================
+echo 5. Push safely (NO FORCE)
 echo ==========================
 
 git push origin main
+
+echo ==========================
+echo DONE - SAFE SYNC COMPLETE
+echo ==========================
 
 pause
