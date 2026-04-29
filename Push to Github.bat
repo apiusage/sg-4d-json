@@ -19,7 +19,7 @@ echo .DS_Store
 ) > .gitignore
 
 echo ==========================
-echo Applying gitignore (reset cache)
+echo Resetting git tracking (apply ignore)
 echo ==========================
 
 git rm -r --cached .
@@ -34,12 +34,16 @@ echo ==========================
 echo Committing changes
 echo ==========================
 
-git commit -m "Clean repo + improved .gitignore"
+git commit -m "Force sync + clean repo"
 
 echo ==========================
-echo Pushing
+echo FORCE PUSH to GitHub (overwrite remote)
 echo ==========================
 
-git push origin main
+git push origin main --force
+
+echo ==========================
+echo DONE
+echo ==========================
 
 pause
