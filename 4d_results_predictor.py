@@ -248,6 +248,6 @@ def predict_and_append_excel():
 
 if __name__ == "__main__":
     fetch_and_save_results()
-    calculate_stats_in_excel()
-    predicted = predict_and_append_excel()
-    print("Predicted:", predicted)
+    # calculate_stats_in_excel()
+    # predicted = predict_and_append_excel()
+    # print("Predicted:", predicted)

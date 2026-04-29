@@ -2,13 +2,13 @@ name: Scrape 4D
 
 on:
   schedule:
-    - cron: '40 10 * * 3,6,0'   # 6:40 PM SGT (npm run scrape)
-    - cron: '50 10 * * 3,6,0'   # 6:50 PM SGT (npm run scrape)
-    - cron: '0 11 * * 3,6,0'    # 7:00 PM SGT (npm run scrape)
-    - cron: '10 11 * * 3,6,0'   # 7:10 PM SGT (npm run scrape)
-    - cron: '25 11 * * 3,6,0'   # 7:25 PM SGT (npm run scrape)
-    - cron: '0 12 * * 3,6,0'    # 8:00 PM SGT (npm run scrape)
-    - cron: '1 12 * * 3,6,0'    # 8:01 PM SGT (Python scripts)
+    - cron: "40 10 * * 3,6,0" # 6:40 PM SGT (npm run scrape)
+    - cron: "50 10 * * 3,6,0" # 6:50 PM SGT (npm run scrape)
+    - cron: "0 11 * * 3,6,0" # 7:00 PM SGT (npm run scrape)
+    - cron: "10 11 * * 3,6,0" # 7:10 PM SGT (npm run scrape)
+    - cron: "25 11 * * 3,6,0" # 7:25 PM SGT (npm run scrape)
+    - cron: "0 12 * * 3,6,0" # 8:00 PM SGT (npm run scrape)
+    - cron: "1 12 * * 3,6,0" # 8:01 PM SGT (Python scripts)
   workflow_dispatch:
     inputs:
       task:
@@ -43,6 +43,7 @@ jobs:
           if [[ "${{ github.event.schedule }}" == "1 12 * * 3,6,0" || "${{ github.event.inputs.task }}" == "python" ]]; then
             echo "Running Python scripts..."
             python3 4dbox_script.py
+            python3 4d_results_predictor.py
           else
             echo "Running npm scrape..."
             npm run scrape
