@@ -1,18 +1,48 @@
 @echo off
 cd /d C:\Users\bston\Dropbox\- SG Pools\sg-4d-json-main
 
-:: create/overwrite .gitignore
-echo 4d.json>.gitignore
-echo *.xls>>.gitignore
-echo *.xlsx>>.gitignore
-echo *.xlsm>>.gitignore
-echo *.csv>>.gitignore
+echo ==========================
+echo Setting up .gitignore
+echo ==========================
 
-git init
-git rm --cached 4d.json *.xls *.xlsx *.xlsm *.csv 2>nul
+(
+echo 4d.json
+echo *.xls
+echo *.xlsx
+echo *.xlsm
+echo *.csv
+) > .gitignore
+
+echo ==========================
+echo Removing tracked ignored files (safe step)
+echo ==========================
+
+git rm -r --cached 4d.json 2>nul
+git rm -r --cached *.xls 2>nul
+git rm -r --cached *.xlsx 2>nul
+git rm -r --cached *.xlsm 2>nul
+git rm -r --cached *.csv 2>nul
+
+echo ==========================
+echo Adding files
+echo ==========================
+
 git add .
-git commit -m "Updates"
-git remote set-url origin https://github.com/apiusage/sg-4d-json.git 2>nul
-git push origin main --force
+
+echo ==========================
+echo Committing changes
+echo ==========================
+
+git commit -m "Update repo with proper .gitignore"
+
+echo ==========================
+echo Pushing to GitHub
+echo ==========================
+
+git push origin main
+
+echo ==========================
+echo DONE
+echo ==========================
 
 pause
