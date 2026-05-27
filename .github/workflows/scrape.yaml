@@ -44,7 +44,6 @@ jobs:
           if [[ "$SCHEDULE" == "1 12 * * 3,6,0" || "$TASK" == "python" ]]; then
             echo "Running Python scripts..."
             python3 4dbox_script.py
-            python3 4d_results_predictor.py
             python3 4dscraping.py
           else
             echo "Running npm scrape..."
