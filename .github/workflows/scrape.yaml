@@ -32,10 +32,12 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y python3-pip
+
           pip3 install openpyxl pandas requests
 
           curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
           sudo apt install -y nodejs
+
           npm install
 
       - name: Run task
@@ -65,4 +67,5 @@ jobs:
           git add -f 4d_results.csv 4d_results_all.xlsx 4d_box_output.xlsx 4d.json || true
 
           git commit -m "Auto update" || echo "No changes"
+
           git push https://x-access-token:$PAT@github.com/${{ github.repository }} HEAD:main
