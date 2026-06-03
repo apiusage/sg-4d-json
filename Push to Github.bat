@@ -2,20 +2,21 @@
 
 cd /d C:\Users\bston\Dropbox\- SG Pools\sg-4d-json-main
 
-echo === Set remote (GitHub repo) ===
+echo === Ensure remote is correct ===
 git remote set-url origin https://github.com/apiusage/sg-4d-json.git
 
-echo === Add all changes ===
+echo === Stage changes (respects .gitignore) ===
 git add .
 
 echo === Commit changes ===
-git commit -m "Force update" 2>nul
+git commit -m "update" 2>nul
 
-echo === Resolve any rebase state (if stuck) ===
-git rebase --abort 2>nul
+echo === Sync with remote (prevents overwrite/deletion) ===
+git fetch origin
+git merge origin/main --no-edit
 
-echo === Force push to GitHub ===
-git push origin main --force
+echo === Push safely (NO FORCE) ===
+git push origin main
 
 echo === Done ===
 pause
