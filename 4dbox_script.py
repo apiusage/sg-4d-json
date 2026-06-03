@@ -66,25 +66,6 @@ def enforce_all_digits(box):
         fixed.append(row)
     return fixed
 
-# ---------------------------
-# Your original functions (with minimal edits)
-# ---------------------------
-
-def append_4d_results(csv="4d_results.csv"):
-    nums = fetch_numbers()[:3]
-    if len(nums) < 3:
-        return None
-
-    now = datetime.now()
-    not_used = "_".join(sorted(set("0123456789") - set("".join(nums)))) + "_"
-    row = {"DrawDate": now.strftime("%d/%m/%Y"), "1st": nums[0], "2nd": nums[1],
-           "3rd": nums[2], "Days": now.strftime("%a"), "Not Used": not_used, "Year": now.year}
-
-    df = pd.read_csv(csv) if os.path.exists(csv) else pd.DataFrame()
-    if row["DrawDate"] not in df.get("DrawDate", []).values:
-        pd.concat([df, pd.DataFrame([row])], ignore_index=True).to_csv(csv, index=False)
-        print("Appended:", row)
-    return row
 
 def generate_box(numbers):
     numbers = [str(n).zfill(4) for n in numbers]
@@ -260,7 +241,6 @@ def generate_predicted_box(sheet_in="Perfect_4DBox", sheet_out="Predicted_Box"):
     print(f"✅ Predicted box saved to '{sheet_out}'")
 
 if __name__ == "__main__":
-    append_4d_results()
     run_4d_box()
     update_4d_box_stats()
     generate_predicted_box()
